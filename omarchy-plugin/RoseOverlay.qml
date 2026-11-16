@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -5,7 +7,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
-import qs.Ui
+import qs.Ui as OmarchyUi
 
 Item {
   id: root
@@ -17,10 +19,12 @@ Item {
   property string section: "chat"
   property string pendingAction: ""
   property string processError: ""
+  property string backendSummary: "OpenCode · checking model"
   property var aiHistory: []
   property string deviceSummary: "Not checked"
-  property string selectedAnimation: "idle_01_loop"
-  property bool refreshTasksAfterAction: false
+  property bool backendChecked: false
+  property bool pendingBackendStatus: false
+  property bool clearNoteDraftOnSave: false
 
   readonly property string pluginId: manifest && manifest.id
     ? String(manifest.id) : "enochlawrence.rose-assistant"
@@ -32,19 +36,21 @@ Item {
       return "file://" + override + "/a/5e63dbe6.gif"
     return ""
   }
-  readonly property string fontFamily: Style.font.family
   readonly property color textColor: Color.foreground
-  readonly property color mutedColor: Qt.rgba(0.78, 0.81, 0.86, 0.72)
+  readonly property color mutedColor: Color.muted
   readonly property color cardColor: Color.menu.background
   readonly property color borderColor: Color.menu.border
+  readonly property color scrimColor: Color.menu.scrim
   readonly property color roseColor: "#e9a2c7"
 
   ListModel { id: messages }
   ListModel { id: taskItems }
+  ListModel { id: noteItems }
   ListModel { id: animationItems }
 
   function open(payloadJson) {
     root.opened = true
+    root.backendChecked = false
     if (messages.count === 0)
       appendMessage("assistant", "I’m Rose. Ask me something, or give me a local task.")
     Qt.callLater(function() {
@@ -56,6 +62,7 @@ Item {
 
   function close() {
     root.opened = false
+    root.clearNoteDraftOnSave = false
     if (bridgeProc.running) bridgeProc.running = false
     root.busy = false
     promptField.text = ""
@@ -120,9 +127,14 @@ Item {
   function applyResponse(raw) {
     var response
     try { response = JSON.parse(String(raw || "").trim()) }
-    catch (e) { root.processError = "The assistant returned an unreadable response."; return }
+    catch (e) {
+      root.processError = "The assistant returned an unreadable response."
+      if (root.pendingAction === "note-add") root.clearNoteDraftOnSave = false
+      return
+    }
     if (!response || response.ok !== true) {
       root.processError = response && response.error ? String(response.error) : "The action failed."
+      if (root.pendingAction === "note-add") root.clearNoteDraftOnSave = false
       root.appendMessage("assistant", root.processError)
       return
     }
@@ -138,13 +150,24 @@ Item {
       root.setTasks(data.tasks || [])
     } else if (root.pendingAction === "tasks-list") {
       root.setTasks(data.tasks || [])
-      if (data.text) root.appendMessage("assistant", data.text)
+      if (!root.backendChecked && root.opened)
+        root.pendingBackendStatus = true
+    } else if (root.pendingAction === "backend-status") {
+      root.backendSummary = data.text || "OpenCode · status unavailable"
+      root.backendChecked = true
     } else if (root.pendingAction === "task-toggle") {
       root.setTasks(data.tasks || [])
     } else if (root.pendingAction === "note-add") {
-      root.appendMessage("assistant", data.text || "Note saved locally.")
+      if (root.section === "chat") root.appendMessage("assistant", data.text || "Note saved locally.")
+      root.setNotes(data.notes || [])
+      if (root.clearNoteDraftOnSave) {
+        noteTitleField.text = ""
+        noteBodyField.text = ""
+        root.clearNoteDraftOnSave = false
+      }
     } else if (root.pendingAction === "notes-list") {
-      root.appendMessage("assistant", data.text || "No notes yet.")
+      root.setNotes(data.notes || [])
+      if (root.section === "chat" && data.text) root.appendMessage("assistant", data.text)
     } else if (root.pendingAction === "device-status") {
       root.deviceSummary = data.text || "No device found."
       animationItems.clear()
@@ -152,16 +175,17 @@ Item {
         animationItems.append({"name": data.animations[animationIndex]})
     } else if (root.pendingAction === "device-play") {
       root.deviceSummary = data.text || "Animation command sent."
-    } else if (root.pendingAction === "animations") {
-      animationItems.clear()
-      for (var i = 0; i < (data.animations || []).length; i++)
-        animationItems.append({"name": data.animations[i]})
     }
   }
 
   function setTasks(items) {
     taskItems.clear()
     for (var i = 0; i < items.length; i++) taskItems.append(items[i])
+  }
+
+  function setNotes(items) {
+    noteItems.clear()
+    for (var i = 0; i < items.length; i++) noteItems.append(items[i])
   }
 
   Process {
@@ -182,6 +206,10 @@ Item {
       root.busy = false
       if (exitCode !== 0 && root.processError !== "")
         root.appendMessage("assistant", root.processError)
+      if (root.pendingBackendStatus && root.opened) {
+        root.pendingBackendStatus = false
+        Qt.callLater(function() { root.runBridge("backend-status", []) })
+      }
     }
   }
 
@@ -196,7 +224,7 @@ Item {
 
     Rectangle {
       anchors.fill: parent
-      color: Qt.rgba(0.025, 0.03, 0.045, 0.78)
+      color: root.scrimColor
       MouseArea { anchors.fill: parent; onClicked: root.dismiss() }
     }
 
@@ -214,8 +242,8 @@ Item {
 
       Rectangle {
         id: card
-        width: Math.min(1000, focusScope.width - 48)
-        height: Math.min(720, focusScope.height - 48)
+        width: Math.max(0, Math.min(1000, focusScope.width - 40))
+        height: Math.max(0, Math.min(720, focusScope.height - 40))
         anchors.centerIn: parent
         radius: 28
         color: root.cardColor
@@ -266,21 +294,37 @@ Item {
               Text { text: "ROSE / 01"; color: root.textColor; font.pixelSize: 19; font.bold: true; font.letterSpacing: 2 }
               Text { text: "TABY × OMARCHY · PERSONAL ASSISTANT"; color: root.mutedColor; font.pixelSize: 9; font.letterSpacing: 1.1 }
             }
-            Text { text: root.busy ? "THINKING" : "READY"; color: root.busy ? root.roseColor : "#94d7b0"; font.pixelSize: 10; font.bold: true }
+            ColumnLayout {
+              spacing: 4
+              Text { text: root.busy ? "THINKING" : "READY"; color: root.busy ? root.roseColor : "#94d7b0"; font.pixelSize: 10; font.bold: true; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
+              Text { text: root.backendSummary; color: root.mutedColor; font.pixelSize: 9; horizontalAlignment: Text.AlignRight; Layout.alignment: Qt.AlignRight }
+            }
+            OmarchyUi.Button {
+              Layout.preferredWidth: 34; Layout.preferredHeight: 34
+              text: "×"; foreground: root.mutedColor; accent: root.roseColor
+              horizontalPadding: 0; verticalPadding: 0; focusable: true
+              tooltipText: "Close assistant"
+              onClicked: root.dismiss()
+            }
           }
 
           RowLayout {
             Layout.fillWidth: true
             spacing: 8
             Repeater {
-              model: [{"id":"chat","label":"Chat"},{"id":"tasks","label":"Tasks"},{"id":"device","label":"Physical Taby"}]
-              delegate: Rectangle {
+              model: [{"id":"chat","label":"Chat"},{"id":"tasks","label":"Tasks"},{"id":"notes","label":"Notes"},{"id":"device","label":"Device"}]
+              delegate: OmarchyUi.Button {
                 Layout.fillWidth: true
-                implicitHeight: 38
-                radius: 11
-                color: root.section === modelData.id ? Qt.rgba(0.91,0.64,0.78,0.18) : Qt.rgba(1,1,1,0.035)
-                Text { anchors.centerIn: parent; text: modelData.label; color: root.section === modelData.id ? root.roseColor : root.mutedColor; font.pixelSize: 12 }
-                MouseArea { anchors.fill: parent; onClicked: { root.section = modelData.id; if (modelData.id === "device") root.runBridge("device-status", []) } }
+                text: modelData.label
+                selected: root.section === modelData.id
+                foreground: root.textColor
+                accent: root.roseColor
+                focusable: true
+                onClicked: {
+                  root.section = modelData.id
+                  if (modelData.id === "device") root.runBridge("device-status", [])
+                  else if (modelData.id === "notes") root.runBridge("notes-list", [])
+                }
               }
             }
           }
@@ -288,7 +332,7 @@ Item {
           StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: root.section === "chat" ? 0 : root.section === "tasks" ? 1 : 2
+            currentIndex: root.section === "chat" ? 0 : root.section === "tasks" ? 1 : root.section === "notes" ? 2 : 3
 
             ColumnLayout {
               spacing: 12
@@ -321,31 +365,30 @@ Item {
               }
               RowLayout {
                 Layout.fillWidth: true
-                TextField {
+                OmarchyUi.TextField {
                   id: promptField
                   Layout.fillWidth: true
                   placeholderText: "Ask Rose, add a task, or save a note…"
                   onAccepted: root.submitPrompt()
                 }
-                Rectangle {
-                  width: 78; height: 40; radius: 12
-                  color: root.busy ? "#3d3b43" : "#9a6388"
-                  Text { anchors.centerIn: parent; text: root.busy ? "…" : "Send"; color: "white"; font.pixelSize: 12; font.bold: true }
-                  MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: root.submitPrompt() }
+                OmarchyUi.Button {
+                  text: root.busy ? "…" : "Send"
+                  foreground: "white"; accent: root.roseColor; background: "#9a6388"
+                  enabled: !root.busy; focusable: true
+                  onClicked: root.submitPrompt()
                 }
               }
               RowLayout {
                 Layout.fillWidth: true
                 spacing: 7
                 Repeater {
-                  model: ["List tasks", "Add task", "Physical Taby"]
-                  delegate: Rectangle {
+                  model: ["List tasks", "Add task", "Add note", "Physical Taby"]
+                  delegate: OmarchyUi.Button {
                     Layout.fillWidth: true
-                    height: 30; radius: 10
-                    color: Qt.rgba(0.91, 0.64, 0.78, 0.075)
-                    border.color: Qt.rgba(0.91, 0.64, 0.78, 0.18)
-                    Text { anchors.centerIn: parent; text: modelData; color: root.mutedColor; font.pixelSize: 10 }
-                    MouseArea { anchors.fill: parent; onClicked: root.quickAction(modelData) }
+                    text: modelData; foreground: root.mutedColor; accent: root.roseColor
+                    background: Qt.rgba(0.91, 0.64, 0.78, 0.075)
+                    focusable: true
+                    onClicked: root.quickAction(modelData)
                   }
                 }
               }
@@ -360,11 +403,11 @@ Item {
               spacing: 10
               RowLayout {
                 Layout.fillWidth: true
-                TextField { id: taskField; Layout.fillWidth: true; placeholderText: "Add a local task…"; onAccepted: root.addTask() }
-                Rectangle {
-                  width: 72; height: 38; radius: 11; color: "#9a6388"
-                  Text { anchors.centerIn: parent; text: "Add"; color: "white"; font.pixelSize: 12; font.bold: true }
-                  MouseArea { anchors.fill: parent; onClicked: root.addTask() }
+                OmarchyUi.TextField { id: taskField; Layout.fillWidth: true; placeholderText: "Add a local task…"; onAccepted: root.addTask() }
+                OmarchyUi.Button {
+                  text: "Add"; foreground: "white"; accent: root.roseColor
+                  background: "#9a6388"; focusable: true; enabled: !root.busy
+                  onClicked: root.addTask()
                 }
               }
               ListView {
@@ -377,18 +420,83 @@ Item {
                     anchors.fill: parent; anchors.margins: 10; spacing: 8
                     Text { Layout.fillWidth: true; text: model.title; color: model.done ? root.mutedColor : root.textColor; font.pixelSize: 12; elide: Text.ElideRight }
                     Text { text: model.done ? "DONE" : "OPEN"; color: root.roseColor; font.pixelSize: 9; font.bold: true }
-                    Rectangle {
-                      width: 54; height: 28; radius: 8; color: "#303643"
-                      Text { anchors.centerIn: parent; text: model.done ? "Reopen" : "Done"; color: root.textColor; font.pixelSize: 9 }
-                      MouseArea { anchors.fill: parent; onClicked: root.toggleTask(model.id, !model.done) }
+                    OmarchyUi.Button {
+                      text: model.done ? "Reopen" : "Done"
+                      foreground: root.textColor; accent: root.roseColor
+                      horizontalPadding: 8; verticalPadding: 4; focusable: true
+                      onClicked: root.toggleTask(model.id, !model.done)
                     }
                   }
                 }
+                Text {
+                  anchors.centerIn: parent
+                  visible: taskItems.count === 0
+                  text: "A little room for what’s next. Add your first task above."
+                  color: root.mutedColor
+                  font.pixelSize: 12
+                  wrapMode: Text.Wrap
+                  width: parent.width * 0.72
+                  horizontalAlignment: Text.AlignHCenter
+                }
               }
-              Rectangle {
-                Layout.fillWidth: true; height: 32; radius: 9; color: "#252b35"
-                Text { anchors.centerIn: parent; text: "Refresh tasks"; color: root.mutedColor; font.pixelSize: 10 }
-                MouseArea { anchors.fill: parent; onClicked: root.runBridge("tasks-list", []) }
+              OmarchyUi.Button {
+                Layout.fillWidth: true; text: "Refresh tasks"
+                foreground: root.mutedColor; accent: root.roseColor; focusable: true
+                onClicked: root.runBridge("tasks-list", [])
+              }
+            }
+
+            ColumnLayout {
+              spacing: 10
+              RowLayout {
+                Layout.fillWidth: true
+                OmarchyUi.TextField { id: noteTitleField; Layout.fillWidth: true; placeholderText: "A short title" }
+                OmarchyUi.Button {
+                  text: "Save note"; foreground: "white"; accent: root.roseColor
+                  background: "#9a6388"; focusable: true; enabled: !root.busy
+                  onClicked: root.saveNote()
+                }
+              }
+              TextArea {
+                id: noteBodyField
+                Layout.fillWidth: true
+                Layout.preferredHeight: 100
+                placeholderText: "Capture a thought. This stays in your local Taby database."
+                wrapMode: TextEdit.Wrap
+                color: root.textColor
+                selectionColor: root.roseColor
+                selectedTextColor: "white"
+                placeholderTextColor: root.mutedColor
+                font.family: Style.font.family
+                font.pixelSize: 13
+                background: Rectangle {
+                  radius: 12
+                  color: Qt.rgba(1, 1, 1, 0.035)
+                  border.color: root.borderColor
+                  border.width: 1
+                }
+              }
+              ListView {
+                Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8
+                model: noteItems
+                delegate: Rectangle {
+                  width: ListView.view.width
+                  height: noteColumn.implicitHeight + 22
+                  radius: 12
+                  color: Qt.rgba(1,1,1,0.04)
+                  ColumnLayout {
+                    id: noteColumn
+                    anchors.fill: parent; anchors.margins: 11; spacing: 4
+                    Text { Layout.fillWidth: true; text: model.title; color: root.textColor; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight }
+                    Text { Layout.fillWidth: true; text: model.body || "(empty note)"; color: root.mutedColor; font.pixelSize: 11; wrapMode: Text.Wrap }
+                  }
+                }
+                Text {
+                  anchors.centerIn: parent
+                  visible: noteItems.count === 0
+                  text: "Your saved notes will appear here."
+                  color: root.mutedColor; font.pixelSize: 12
+                }
               }
             }
 
@@ -398,16 +506,16 @@ Item {
               RowLayout {
                 Layout.fillWidth: true
                 ComboBox { id: animationPicker; Layout.fillWidth: true; model: animationItems; textRole: "name" }
-                Rectangle {
-                  width: 78; height: 38; radius: 11; color: "#9a6388"
-                  Text { anchors.centerIn: parent; text: "Play"; color: "white"; font.pixelSize: 12; font.bold: true }
-                  MouseArea { anchors.fill: parent; onClicked: root.playSelectedAnimation() }
+                OmarchyUi.Button {
+                  text: "Play"; foreground: "white"; accent: root.roseColor
+                  background: "#9a6388"; focusable: true; enabled: !root.busy
+                  onClicked: root.playSelectedAnimation()
                 }
               }
-              Rectangle {
-                Layout.fillWidth: true; height: 32; radius: 9; color: "#252b35"
-                Text { anchors.centerIn: parent; text: "Scan USB device"; color: root.mutedColor; font.pixelSize: 10 }
-                MouseArea { anchors.fill: parent; onClicked: root.runBridge("device-status", []) }
+              OmarchyUi.Button {
+                Layout.fillWidth: true; text: "Scan USB device"
+                foreground: root.mutedColor; accent: root.roseColor; focusable: true
+                onClicked: root.runBridge("device-status", [])
               }
               Text { Layout.fillWidth: true; text: "No touch input on this C6 board. USB commands are limited to animations in its bundled catalog."; color: root.mutedColor; font.pixelSize: 10; wrapMode: Text.Wrap }
             }
@@ -427,6 +535,14 @@ Item {
     }
   }
 
+  function saveNote() {
+    var title = String(noteTitleField.text || "").trim()
+    var body = String(noteBodyField.text || "").trim()
+    if (root.busy || (!title && !body)) return
+    root.clearNoteDraftOnSave = true
+    root.runBridge("note-add", [title || "Untitled", body])
+  }
+
   function toggleTask(taskId, done) {
     root.runBridge("task-toggle", [String(taskId), done ? "done" : "open"])
   }
@@ -441,6 +557,10 @@ Item {
     else if (label === "Add task") {
       root.section = "tasks"
       Qt.callLater(function() { taskField.forceActiveFocus() })
+    } else if (label === "Add note") {
+      root.section = "notes"
+      root.runBridge("notes-list", [])
+      Qt.callLater(function() { noteTitleField.forceActiveFocus() })
     } else {
       root.section = "device"
       root.runBridge("device-status", [])

@@ -5,6 +5,9 @@ the companion's local SQLite store, OpenCode text-only generation, and the
 bounded USB animation protocol. It does not invoke shell commands from the model,
 modify Hyprland configuration, or install itself.
 
+The overlay has Chat, Tasks, Notes, and Device sections. Task/note actions are
+local; the header identifies the configured OpenCode model when available.
+
 Validate the manifest without changing your active shell:
 
 ```sh

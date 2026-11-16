@@ -180,3 +180,21 @@ than cloning either product:
 - The plugin has not been symlinked into `~/.config/omarchy/plugins` and is not
   enabled in the live shell. Local install/uninstall scripts exist but have not
   been run.
+
+## Progress update — 2026-11-16, UI and device validation
+
+- Expanded the overlay to four sections: Chat, Tasks, Notes, and Device. Notes
+  are loaded/saved through the local SQLite bridge; chat remains text-only with
+  the configured OpenCode model label shown separately in the header. Added a
+  dismiss control and empty-state copy.
+- The GTK/Quickshell UI does not change firmware. Separately, at the owner's
+  request, rebuilt the existing experimental C6 source with ESP-IDF 5.4.2,
+  packaged the exact `c6-lcd-1.47` target, and flashed only its reviewed image
+  regions (bootloader, partition table, OTA data, app, assets). The installer
+  preserved NVS/factory data and verified firmware `1.3.0` / assets `0.2.0-c6`
+  by USB readback. The USB confirmation animation was accepted; visual display
+  verification still needs the owner.
+- QML syntax lint, Python compile, bridge notes/model-status smoke tests, and
+  Omarchy manifest validation pass. A standalone Quickshell launch cannot resolve
+  Omarchy's injected `qs.*` imports; the plugin remains uninstalled/disabled, so
+  actual host-shell visual validation is pending approval to install/enable it.

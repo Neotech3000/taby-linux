@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "enochlawrence.rose-assistant",
   "name": "Rose Assistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Enoch Lawrence",
   "description": "A Rose-inspired, Taby-powered assistant overlay for Omarchy.",
   "kinds": [
