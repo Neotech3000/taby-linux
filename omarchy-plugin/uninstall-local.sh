@@ -1,17 +1,24 @@
 #!/usr/bin/env sh
 set -eu
 
+PLUGIN_ID="enochlawrence.rose-assistant"
+PLUGINS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins"
+TARGET="$PLUGINS_DIR/$PLUGIN_ID"
+MARKER="$TARGET/.taby-linux-local-install"
 SOURCE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-TARGET="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/enochlawrence.rose-assistant"
 
-if [ ! -L "$TARGET" ]; then
-  printf 'Not removing a non-symlink or unrelated plugin path: %s\n' "$TARGET"
+if [ -L "$TARGET" ] || [ ! -d "$TARGET" ] || [ ! -f "$MARKER" ]; then
+  printf 'Not removing an unmanaged plugin path: %s\n' "$TARGET" >&2
   exit 1
 fi
-LINK=$(readlink -f "$TARGET")
-if [ "$LINK" != "$SOURCE" ]; then
-  printf 'Refusing to remove a link to a different location: %s\n' "$LINK" >&2
+INSTALLED_FROM=$(cat "$MARKER")
+if [ "$INSTALLED_FROM" != "$SOURCE" ]; then
+  printf 'Refusing to remove a copy installed from another source: %s\n' "$INSTALLED_FROM" >&2
   exit 1
 fi
-rm -- "$TARGET"
-printf 'Removed local plugin symlink. The project files were left untouched.\n'
+
+if command -v omarchy >/dev/null 2>&1; then
+  omarchy plugin disable "$PLUGIN_ID"
+fi
+rm -r -- "$TARGET"
+printf 'Removed the managed plugin copy at %s\n' "$TARGET"

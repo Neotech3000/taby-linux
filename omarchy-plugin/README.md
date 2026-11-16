@@ -14,11 +14,12 @@ Validate the manifest without changing your active shell:
 omarchy plugin validate ./omarchy-plugin
 ```
 
-The current development build is not installed or enabled. From the repository
-root, after review, install
-the local symlink with `./install-local.sh`, then enable it explicitly with the
-printed `omarchy plugin enable` command. The script never edits shell.json or
-Hyprland bindings. `./uninstall-local.sh` only removes its own symlink.
+From the repository root, `./install-local.sh` copies the plugin into
+`~/.config/omarchy/plugins/` (Omarchy rejects plugin-root symlinks) and validates
+the copy. Then enable it explicitly with the printed `omarchy plugin enable`
+command. Enabling updates the shell's plugin/bar configuration, but does not add
+a keybinding. `./uninstall-local.sh` disables and removes only this script's
+marked copy.
 
 The Rose overlay asks OpenCode's stateless text-generation endpoint, which has no
 tool access. It sends only conversational chat turns—not local task or note

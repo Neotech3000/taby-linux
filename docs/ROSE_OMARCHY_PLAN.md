@@ -175,11 +175,10 @@ than cloning either product:
   `bin/rose-bridge` for OpenCode text generation, local tasks/notes, and the
   experimental C6 USB animation catalog. The Omarchy manifest validator,
   Python compile, local bridge task/device checks, and a tiny OpenCode response
-  check pass. A standalone QML load is still pending because Omarchy injects
-  its `qs.*` modules through the host shell.
-- The plugin has not been symlinked into `~/.config/omarchy/plugins` and is not
-  enabled in the live shell. Local install/uninstall scripts exist but have not
-  been run.
+  check pass. At this initial stage, a standalone QML load was pending because
+  Omarchy injects its `qs.*` modules through the host shell.
+- At this initial stage the plugin was not installed or enabled. See the later
+  install update below for the current state.
 
 ## Progress update — 2026-11-16, UI and device validation
 
@@ -195,6 +194,10 @@ than cloning either product:
   by USB readback. The USB confirmation animation was accepted; visual display
   verification still needs the owner.
 - QML syntax lint, Python compile, bridge notes/model-status smoke tests, and
-  Omarchy manifest validation pass. A standalone Quickshell launch cannot resolve
-  Omarchy's injected `qs.*` imports; the plugin remains uninstalled/disabled, so
-  actual host-shell visual validation is pending approval to install/enable it.
+  Omarchy manifest validation pass. Omarchy rejects plugin-root symlinks, so the
+  local installer copies the plugin and marks that managed copy for safe updates
+  and removal.
+- The owner then approved installation. The plugin is enabled in the right bar
+  section and has been summoned in the live shell. After fixing live delegate
+  binding errors, a shell restart loaded the current files; the fresh log showed
+  no Rose plugin QML errors. The owner should still confirm the visual appearance.

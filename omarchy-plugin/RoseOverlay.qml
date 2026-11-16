@@ -180,12 +180,14 @@ Item {
 
   function setTasks(items) {
     taskItems.clear()
-    for (var i = 0; i < items.length; i++) taskItems.append(items[i])
+    for (var i = 0; i < items.length; i++)
+      taskItems.append({"taskId": String(items[i].id), "title": String(items[i].title), "done": Boolean(items[i].done)})
   }
 
   function setNotes(items) {
     noteItems.clear()
-    for (var i = 0; i < items.length; i++) noteItems.append(items[i])
+    for (var i = 0; i < items.length; i++)
+      noteItems.append({"noteTitle": String(items[i].title), "noteBody": String(items[i].body || "")})
   }
 
   Process {
@@ -274,7 +276,7 @@ Item {
                 id: fallbackFace
                 anchors.centerIn: parent
                 width: 42; height: 42
-                source: Qt.resolvedUrl("../taby.svg")
+                source: Qt.resolvedUrl("RoseFace.svg")
                 fillMode: Image.PreserveAspectFit
                 visible: animatedFace.status !== Image.Ready
               }
@@ -314,6 +316,7 @@ Item {
             Repeater {
               model: [{"id":"chat","label":"Chat"},{"id":"tasks","label":"Tasks"},{"id":"notes","label":"Notes"},{"id":"device","label":"Device"}]
               delegate: OmarchyUi.Button {
+                required property var modelData
                 Layout.fillWidth: true
                 text: modelData.label
                 selected: root.section === modelData.id
@@ -342,20 +345,23 @@ Item {
                 clip: true; spacing: 9
                 model: messages
                 delegate: Item {
+                  id: messageRow
+                  required property string role
+                  required property string text
                   width: transcript.width
                   height: bubble.height + 6
                   Rectangle {
                     id: bubble
                     width: Math.min(transcript.width * 0.9, textItem.implicitWidth + 28)
                     height: textItem.implicitHeight + 22
-                    x: model.role === "user" ? transcript.width - width : 0
+                    x: messageRow.role === "user" ? transcript.width - width : 0
                     radius: 14
-                    color: model.role === "user" ? Qt.rgba(0.91,0.64,0.78,0.15) : Qt.rgba(1,1,1,0.045)
+                    color: messageRow.role === "user" ? Qt.rgba(0.91,0.64,0.78,0.15) : Qt.rgba(1,1,1,0.045)
                     Text {
                       id: textItem
                       anchors.centerIn: parent
                       width: Math.min(transcript.width * 0.9 - 28, implicitWidth)
-                      text: model.text
+                      text: messageRow.text
                       wrapMode: Text.Wrap
                       color: root.textColor
                       font.pixelSize: 13
@@ -384,6 +390,7 @@ Item {
                 Repeater {
                   model: ["List tasks", "Add task", "Add note", "Physical Taby"]
                   delegate: OmarchyUi.Button {
+                    required property string modelData
                     Layout.fillWidth: true
                     text: modelData; foreground: root.mutedColor; accent: root.roseColor
                     background: Qt.rgba(0.91, 0.64, 0.78, 0.075)
@@ -414,17 +421,21 @@ Item {
                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8
                 model: taskItems
                 delegate: Rectangle {
+                  id: taskRow
+                  required property string taskId
+                  required property string title
+                  required property bool done
                   width: ListView.view.width; height: 48; radius: 12
                   color: Qt.rgba(1,1,1,0.04)
                   RowLayout {
                     anchors.fill: parent; anchors.margins: 10; spacing: 8
-                    Text { Layout.fillWidth: true; text: model.title; color: model.done ? root.mutedColor : root.textColor; font.pixelSize: 12; elide: Text.ElideRight }
-                    Text { text: model.done ? "DONE" : "OPEN"; color: root.roseColor; font.pixelSize: 9; font.bold: true }
+                    Text { Layout.fillWidth: true; text: taskRow.title; color: taskRow.done ? root.mutedColor : root.textColor; font.pixelSize: 12; elide: Text.ElideRight }
+                    Text { text: taskRow.done ? "DONE" : "OPEN"; color: root.roseColor; font.pixelSize: 9; font.bold: true }
                     OmarchyUi.Button {
-                      text: model.done ? "Reopen" : "Done"
+                      text: taskRow.done ? "Reopen" : "Done"
                       foreground: root.textColor; accent: root.roseColor
                       horizontalPadding: 8; verticalPadding: 4; focusable: true
-                      onClicked: root.toggleTask(model.id, !model.done)
+                      onClicked: root.toggleTask(taskRow.taskId, !taskRow.done)
                     }
                   }
                 }
@@ -480,6 +491,9 @@ Item {
                 Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8
                 model: noteItems
                 delegate: Rectangle {
+                  id: noteRow
+                  required property string noteTitle
+                  required property string noteBody
                   width: ListView.view.width
                   height: noteColumn.implicitHeight + 22
                   radius: 12
@@ -487,8 +501,8 @@ Item {
                   ColumnLayout {
                     id: noteColumn
                     anchors.fill: parent; anchors.margins: 11; spacing: 4
-                    Text { Layout.fillWidth: true; text: model.title; color: root.textColor; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight }
-                    Text { Layout.fillWidth: true; text: model.body || "(empty note)"; color: root.mutedColor; font.pixelSize: 11; wrapMode: Text.Wrap }
+                    Text { Layout.fillWidth: true; text: noteRow.noteTitle; color: root.textColor; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight }
+                    Text { Layout.fillWidth: true; text: noteRow.noteBody || "(empty note)"; color: root.mutedColor; font.pixelSize: 11; wrapMode: Text.Wrap }
                   }
                 }
                 Text {
