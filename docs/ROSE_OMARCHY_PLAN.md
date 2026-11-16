@@ -70,11 +70,13 @@ than cloning either product:
 
 ### First useful release
 
-1. **Chat:** use the OpenCode default model configured on this machine through its
-   stateless, text-only `POST /api/experimental/generate/text` path. This endpoint
-   does not provide tools. Show which provider/model is active and that prompts
-   may leave the computer or incur provider usage charges. Keep Ollama as an
-   explicit local-only option, not an automatic download or background model.
+1. **Chat:** offer OpenCode and local Ollama as explicit backends. The app-level
+   OpenCode default is `opencode/big-pickle`; send it through the stateless,
+   text-only `POST /api/experimental/generate/text` endpoint with an explicit
+   model ref. This endpoint does not provide tools. Show the selected model and
+   that OpenCode prompts may leave the computer or incur provider limits/charges.
+   Do not change the user's global OpenCode model config. Ollama is local-only,
+   never auto-started, and never downloads a model automatically.
 2. **Local task and note commands:** keep the current SQLite store. Parse direct
    commands locally so task/note contents are never silently added to a cloud
    prompt. Search or list local data only when the user asks.
@@ -184,8 +186,8 @@ than cloning either product:
 
 - Expanded the overlay to four sections: Chat, Tasks, Notes, and Device. Notes
   are loaded/saved through the local SQLite bridge; chat remains text-only with
-  the configured OpenCode model label shown separately in the header. Added a
-  dismiss control and empty-state copy.
+  the selected backend/model shown separately in the header. Added a dismiss
+  control and empty-state copy.
 - The GTK/Quickshell UI does not change firmware. Separately, at the owner's
   request, rebuilt the existing experimental C6 source with ESP-IDF 5.4.2,
   packaged the exact `c6-lcd-1.47` target, and flashed only its reviewed image
@@ -206,3 +208,8 @@ than cloning either product:
   were too translucent. The bridge now resolves the source checkout through the
   install marker, and the scrim/card enforce readable opacity while retaining
   theme colors. Installed bridge smoke test and a second live-shell reload pass.
+- Added per-app backend/model selection for OpenCode and local Ollama in both the
+  GTK companion and Omarchy overlay. Big Pickle is the app-level OpenCode default;
+  the user's global OpenCode configuration is unchanged. The current machine has
+  no local Ollama server, so that selector will report unavailable until one is
+  started and has a model installed.

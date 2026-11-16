@@ -9,19 +9,20 @@ an official Hey Taby build.
 - Local SQLite tasks and notes.
 - A simple chat UI with explicit commands (`add/create task …`, `list tasks`,
   `remind me to … in 10 minutes`, `note title: body`, `find notes …`).
-- Free-form chat through your already configured OpenCode default model, using
-  OpenCode's stateless text-generation endpoint. No API key is copied into this
-  app. Provider usage may be remote or billable; the app says so in the UI.
-- Optional Ollama chat on `127.0.0.1:11434` when you turn the OpenCode toggle off.
+- A model picker for OpenCode and local Ollama. OpenCode defaults to
+  `opencode/big-pickle` using its stateless text endpoint; this app-level choice
+  does not rewrite your global OpenCode config.
+- Optional local Ollama models discovered on `127.0.0.1:11434`. The app never
+  starts Ollama or downloads a model for you.
 - USB discovery and approved animation playback for the Physical Taby firmware.
 - USB animation support when pointed to a compatible local firmware asset pack.
 
 Tasks and notes stay in `~/.local/share/taby-linux/taby.db`; chat history is
 kept in memory for the current app run only. Task and note commands are handled locally and are not
 sent to OpenCode. Free-form chat goes through OpenCode's stateless generation
-API, with no tool or shell access, and may be sent to the configured model
-provider. Ollama is optional and is contacted only on localhost. The app does
-not connect to Hey Taby Cloud, execute shell commands, or flash firmware.
+API, with no tool or shell access, and may be sent to the selected provider.
+Local Ollama is contacted only on localhost. The app does not connect to Hey
+Taby Cloud, execute shell commands, or flash firmware.
 Calendar sync, voice input, web actions, and the official Taby Brain are not
 implemented yet.
 
@@ -39,11 +40,12 @@ If needed, install the distro packages for Python GTK 4 and pyserial (for
 example, `python-gobject`/`python3-gobject` and `python3-serial`). Do not install
 PyGObject into a pip virtual environment; use your distro package manager.
 
-OpenCode is the default free-form chat backend when its CLI is installed and
-configured. It reuses your existing OpenCode credentials/model and may incur
-provider usage charges; toggle it off in Chat to use a local Ollama model.
-Ollama is not auto-started and the app never downloads models without asking.
-To use Ollama, start it and install a model that fits your computer:
+The chat pane lets you switch between OpenCode and Local Ollama and choose an
+available model. OpenCode uses your existing connection and defaults to Big
+Pickle, though provider limits may apply. Model prompts may be sent to the
+selected provider. Local Ollama is contacted only on `127.0.0.1`; it is not
+auto-started and the app never downloads models without asking. To use Ollama,
+start it and install a model that fits your computer:
 
 ```sh
 ollama serve

@@ -29,8 +29,8 @@ def load_app_backend():
             "and refresh the installed plugin copy."
         )
     sys.path.insert(0, str(app_root))
-    from app import Device, OpenCode, Store
-    return Device, OpenCode, Store
+    from app import Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store
+    return Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store
 
 
 def emit(data=None, error=None):
@@ -53,9 +53,16 @@ def note_rows(store):
 def main():
     parser = argparse.ArgumentParser(prog="rose-bridge")
     sub = parser.add_subparsers(dest="action", required=True)
-    ask = sub.add_parser("ask", help="Ask configured OpenCode text generation")
+    ask = sub.add_parser("ask", help="Ask the selected text model")
+    ask.add_argument("backend", choices=("opencode", "ollama"))
+    ask.add_argument("model_ref")
     ask.add_argument("messages_json")
     sub.add_parser("backend-status", help="Read the configured OpenCode model label")
+    options = sub.add_parser("backend-options", help="List models for the selected backend")
+    options.add_argument("backend", nargs="?", choices=("opencode", "ollama"))
+    select = sub.add_parser("model-select", help="Persist the chosen model")
+    select.add_argument("backend", choices=("opencode", "ollama"))
+    select.add_argument("model_ref")
     task_add = sub.add_parser("task-add", help="Create a local task")
     task_add.add_argument("title", nargs="+")
     task_toggle = sub.add_parser("task-toggle", help="Complete or reopen a local task")
@@ -72,7 +79,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        Device, OpenCode, Store = load_app_backend()
+        Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store = load_app_backend()
         store = Store()
         if args.action == "ask":
             messages = json.loads(args.messages_json)
@@ -83,8 +90,59 @@ def main():
                         or not isinstance(item.get("content"), str)
                         or len(item["content"]) > 6000):
                     return emit(error="Conversation messages must be bounded user/assistant text.")
-            # Stateless generation: no file, shell, browser, or task tools.
-            return emit({"text": OpenCode().ask(messages)})
+            # OpenCode's stateless generation endpoint has no tools. Ollama is
+            # contacted only through its local loopback API.
+            if args.backend == "opencode":
+                return emit({"text": OpenCode().ask(messages, args.model_ref)})
+            return emit({"text": Ollama().ask(messages, args.model_ref)})
+
+        if args.action == "backend-options":
+            backend = args.backend
+            if backend is not None:
+                store.set_setting("use_opencode", "1" if backend == "opencode" else "0")
+            else:
+                backend = "opencode" if store.get_setting(
+                    "use_opencode", "1" if OpenCode().cli else "0") == "1" else "ollama"
+            setting = "opencode_model" if backend == "opencode" else "ollama_model"
+            current = store.get_setting(setting, OPENCODE_DEFAULT_MODEL if backend == "opencode" else "")
+            preferred = OPENCODE_DEFAULT_MODEL if backend == "opencode" else ""
+            try:
+                options = OpenCode().models() if backend == "opencode" else Ollama().models()
+                availability_error = ""
+            except Exception:
+                options = []
+                availability_error = (
+                    "OpenCode unavailable · check its connection" if backend == "opencode"
+                    else "Ollama unavailable · start it locally to load models"
+                )
+            ids = [item["id"] for item in options]
+            if current not in ids:
+                current = preferred if preferred in ids else (ids[0] if ids else current)
+                if current:
+                    store.set_setting(setting, current)
+            selected = next((item for item in options if item["id"] == current), None)
+            if selected:
+                text = (f"OpenCode · {selected['label']} · may be remote/paid" if backend == "opencode"
+                        else f"Local Ollama · {selected['label']} · stays on this device")
+            else:
+                text = availability_error or (
+                    "OpenCode has no available chat models" if backend == "opencode"
+                    else "No local Ollama models · start Ollama and install a model"
+                )
+            return emit({"backend": backend, "model": current if selected else "", "models": options,
+                         "available": bool(options), "text": text,
+                         "tasks": task_rows(store)})
+
+        if args.action == "model-select":
+            try:
+                options = (OpenCode().models() if args.backend == "opencode" else Ollama().models())
+            except Exception:
+                options = []
+            if args.model_ref not in [item["id"] for item in options]:
+                return emit(error="That model is no longer available for the selected backend.")
+            setting = "opencode_model" if args.backend == "opencode" else "ollama_model"
+            store.set_setting(setting, args.model_ref)
+            return emit({"saved": True, "backend": args.backend, "model": args.model_ref})
 
         if args.action == "backend-status":
             try:

@@ -19,7 +19,10 @@ Item {
   property string section: "chat"
   property string pendingAction: ""
   property string processError: ""
-  property string backendSummary: "OpenCode · checking model"
+  property string backend: "opencode"
+  property string modelRef: "opencode/big-pickle"
+  property var modelOptions: []
+  property string backendSummary: "OpenCode · Big Pickle · checking"
   property var aiHistory: []
   property string deviceSummary: "Not checked"
   property bool backendChecked: false
@@ -58,7 +61,7 @@ Item {
     Qt.callLater(function() {
       if (!root.opened) return
       promptField.forceActiveFocus()
-      root.runBridge("tasks-list", [])
+      root.runBridge("backend-options", [])
     })
   }
 
@@ -122,7 +125,7 @@ Item {
     } else {
       root.aiHistory.push({"role": "user", "content": value})
       if (root.aiHistory.length > 10) root.aiHistory.shift()
-      root.runBridge("ask", [JSON.stringify(root.aiHistory)])
+      root.runBridge("ask", [root.backend, root.modelRef, JSON.stringify(root.aiHistory)])
     }
   }
 
@@ -157,6 +160,31 @@ Item {
     } else if (root.pendingAction === "backend-status") {
       root.backendSummary = data.text || "OpenCode · status unavailable"
       root.backendChecked = true
+    } else if (root.pendingAction === "backend-options") {
+      root.backend = data.backend || root.backend
+      root.modelRef = data.model || ""
+      root.backendSummary = data.text || "No model available"
+      var options = []
+      for (var modelIndex = 0; modelIndex < (data.models || []).length; modelIndex++)
+        options.push({"value": data.models[modelIndex].id, "label": data.models[modelIndex].label})
+      if (options.length === 0)
+        options.push({"value": "", "label": data.text || "No model available"})
+      root.modelOptions = options
+      modelPicker.enabled = !!data.available
+      root.setTasks(data.tasks || [])
+      root.backendChecked = true
+    } else if (root.pendingAction === "model-select") {
+      root.modelRef = data.model || root.modelRef
+      var selectedOption = null
+      for (var selectedIndex = 0; selectedIndex < root.modelOptions.length; selectedIndex++) {
+        if (root.modelOptions[selectedIndex].value === root.modelRef)
+          selectedOption = root.modelOptions[selectedIndex]
+      }
+      if (selectedOption) {
+        root.backendSummary = root.backend === "opencode"
+          ? "OpenCode · " + selectedOption.label + " · may be remote/paid"
+          : "Local Ollama · " + selectedOption.label + " · stays on-device"
+      }
     } else if (root.pendingAction === "task-toggle") {
       root.setTasks(data.tasks || [])
     } else if (root.pendingAction === "note-add") {
@@ -334,6 +362,38 @@ Item {
             }
           }
 
+          RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            OmarchyUi.Dropdown {
+              id: providerPicker
+              Layout.fillWidth: true
+              label: "AI source"
+              options: [
+                {"value": "opencode", "label": "OpenCode"},
+                {"value": "ollama", "label": "Local Ollama"}
+              ]
+              value: root.backend
+              accent: root.roseColor
+              onChanged: function(value) { root.selectBackend(value) }
+            }
+            OmarchyUi.Dropdown {
+              id: modelPicker
+              Layout.fillWidth: true
+              label: "Model"
+              options: root.modelOptions
+              value: root.modelRef
+              accent: root.roseColor
+              onChanged: function(value) { root.selectModel(value) }
+            }
+            OmarchyUi.Button {
+              text: "↻"; tooltipText: "Refresh model list"
+              foreground: root.mutedColor; accent: root.roseColor
+              focusable: true
+              onClicked: root.refreshModels()
+            }
+          }
+
           StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -403,7 +463,9 @@ Item {
               }
               Text {
                 Layout.fillWidth: true
-                text: "OpenCode uses its configured provider (may be remote/paid); local task/note commands stay on-device."
+                text: root.backend === "opencode"
+                  ? "OpenCode chat may be remote/paid. Tasks and notes stay on-device."
+                  : "Local Ollama keeps free-form chat on this device. Tasks and notes stay on-device."
                 color: root.mutedColor; font.pixelSize: 10; wrapMode: Text.Wrap
               }
             }
@@ -557,6 +619,23 @@ Item {
     if (root.busy || (!title && !body)) return
     root.clearNoteDraftOnSave = true
     root.runBridge("note-add", [title || "Untitled", body])
+  }
+
+  function selectBackend(value) {
+    if (root.busy || (value !== "opencode" && value !== "ollama")) return
+    root.backend = value
+    root.backendSummary = value === "opencode" ? "OpenCode · loading models…" : "Local Ollama · loading models…"
+    root.runBridge("backend-options", [value])
+  }
+
+  function selectModel(value) {
+    if (root.busy || !value || value === root.modelRef) return
+    root.modelRef = value
+    root.runBridge("model-select", [root.backend, value])
+  }
+
+  function refreshModels() {
+    if (!root.busy) root.runBridge("backend-options", [root.backend])
   }
 
   function toggleTask(taskId, done) {

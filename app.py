@@ -40,6 +40,7 @@ if not DEFAULT_ASSETS.is_dir() and ADJACENT_FIRMWARE_ASSETS.is_dir():
     DEFAULT_ASSETS = ADJACENT_FIRMWARE_ASSETS
 ASSET_DIR = Path(os.environ.get("TABY_ASSETS_DIR", str(DEFAULT_ASSETS)))
 OLLAMA_URL = "http://127.0.0.1:11434"
+OPENCODE_DEFAULT_MODEL = "opencode/big-pickle"
 SYSTEM_PROMPT = (
     "You are Taby, a warm, concise desktop buddy. You run locally. "
     "Never claim to have changed a task or note unless the desktop app confirms it. "
@@ -216,20 +217,27 @@ class Ollama:
     def __init__(self) -> None:
         self.model: str | None = None
 
-    def refresh(self):
+    def models(self):
         request = urllib.request.Request(OLLAMA_URL + "/api/tags")
         with urllib.request.urlopen(request, timeout=1.5) as response:
             models = json.loads(response.read()).get("models", [])
-        self.model = models[0].get("name") if models else None
+        return [{"id": str(item.get("name", "")), "label": str(item.get("name", ""))}
+                for item in models if item.get("name")]
+
+    def refresh(self):
+        models = self.models()
+        self.model = models[0]["id"] if models else None
         return self.model
 
-    def ask(self, messages: list[dict]) -> str:
-        if not self.model:
+    def ask(self, messages: list[dict], model: str | None = None) -> str:
+        selected_model = model or self.model
+        if not selected_model:
             self.refresh()
-        if not self.model:
+            selected_model = self.model
+        if not selected_model:
             raise RuntimeError("Ollama is running, but no model is installed")
         request_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages[-10:]
-        payload = json.dumps({"model": self.model, "messages": request_messages,
+        payload = json.dumps({"model": selected_model, "messages": request_messages,
                               "stream": False}).encode()
         request = urllib.request.Request(OLLAMA_URL + "/api/chat", data=payload,
             headers={"Content-Type": "application/json"}, method="POST")
@@ -256,7 +264,25 @@ class OpenCode:
             command.extend(["--data", json.dumps(data, ensure_ascii=False)])
         completed = subprocess.run(command, capture_output=True, text=True, timeout=timeout)
         if completed.returncode != 0:
-            # Don't show raw stderr: it can contain local paths or provider details.
+            # Translate known API errors without echoing prompts, auth details, or
+            # arbitrary provider diagnostics into the chat transcript.
+            for output in (completed.stdout, completed.stderr):
+                for line in output.splitlines():
+                    try:
+                        error_data = json.loads(line)
+                    except (json.JSONDecodeError, TypeError):
+                        continue
+                    if not isinstance(error_data, dict):
+                        continue
+                    tag = error_data.get("_tag")
+                    reason = error_data.get("reason")
+                    if tag == "ProviderRequestError" and reason == "rate_limit":
+                        raise RuntimeError(
+                            "OpenCode's selected model reached its usage limit. "
+                            "Switch models or try again later."
+                        )
+                    if tag == "ModelNotFoundError":
+                        raise RuntimeError("That OpenCode model is no longer available. Refresh the model list.")
             raise RuntimeError(f"OpenCode request failed (exit {completed.returncode})")
         try:
             return json.loads(completed.stdout)
@@ -270,12 +296,35 @@ class OpenCode:
         name = model.get("modelID", "default model")
         return f"{provider}/{name}"
 
-    def ask(self, messages: list[dict]) -> str:
+    def models(self) -> list[dict[str, str]]:
+        result = self._api("get", "/api/model")
+        models = result.get("data", [])
+        available = []
+        for model in models:
+            if model.get("type") != "chat" or model.get("enabled") is False:
+                continue
+            provider = str(model.get("providerID", ""))
+            model_id = str(model.get("id", ""))
+            if provider and model_id:
+                available.append({
+                    "id": f"{provider}/{model_id}",
+                    "label": f"{model.get('name') or model_id} · {provider}",
+                })
+        return sorted(available, key=lambda item: (
+            item["id"] != OPENCODE_DEFAULT_MODEL, item["label"].casefold()))
+
+    def ask(self, messages: list[dict], model_ref: str = OPENCODE_DEFAULT_MODEL) -> str:
+        provider_id, separator, model_id = model_ref.partition("/")
+        if not separator or not provider_id or not model_id:
+            raise ValueError("Select a valid OpenCode model.")
         conversation = "\n".join(
             f"{item['role'].capitalize()}: {str(item['content'])[:4000]}"
             for item in messages[-8:])
         prompt = f"{OPENCODE_SYSTEM_PROMPT}\n\nConversation:\n{conversation}\n\nAssistant:"
-        result = self._api("post", "/api/experimental/generate/text", {"prompt": prompt}, timeout=120)
+        result = self._api("post", "/api/experimental/generate/text", {
+            "prompt": prompt,
+            "model": {"id": model_id, "providerID": provider_id},
+        }, timeout=120)
         return result.get("data", {}).get("text", "I couldn't form a reply.")
 
 
@@ -287,6 +336,11 @@ class TabyWindow(Gtk.ApplicationWindow):
         default_opencode = "1" if self.opencode.cli else "0"
         self.use_opencode = (self.store.get_setting("use_opencode", default_opencode) == "1"
                              and bool(self.opencode.cli))
+        self.opencode_model = self.store.get_setting("opencode_model", OPENCODE_DEFAULT_MODEL)
+        self.local_model = self.store.get_setting("ollama_model", "")
+        self.model_options: list[dict[str, str]] = []
+        self._model_load_generation = 0
+        self._syncing_model_controls = False
         self.device_port: str | None = None
         self.chat_messages: list[dict] = []
         self.ai_messages: list[dict] = []
@@ -339,7 +393,7 @@ class TabyWindow(Gtk.ApplicationWindow):
         self.refresh_tasks()
         self.refresh_notes()
         GLib.timeout_add_seconds(1, self._check_reminders)
-        threading.Thread(target=self._check_ollama, daemon=True).start()
+        self._refresh_model_options()
         threading.Thread(target=self._scan_device, daemon=True).start()
 
     def _install_css(self):
@@ -397,16 +451,115 @@ class TabyWindow(Gtk.ApplicationWindow):
         self.send_button = send
         row.append(self.chat_entry); row.append(send)
         page.append(row)
-        self.opencode_toggle = Gtk.CheckButton(
-            label="Use OpenCode for chat (configured provider; may be remote/paid)")
-        self.opencode_toggle.set_active(self.use_opencode)
-        self.opencode_toggle.connect("toggled", self._opencode_toggled)
-        page.append(self.opencode_toggle)
+        model_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.backend_selector = Gtk.DropDown.new_from_strings(["OpenCode", "Local Ollama"])
+        self.backend_selector.set_selected(0 if self.use_opencode else 1)
+        self.backend_selector.connect("notify::selected", self._backend_selected)
+        self.model_selector = Gtk.DropDown.new_from_strings(["Loading models…"])
+        self.model_selector.set_hexpand(True)
+        self.model_selector.set_sensitive(False)
+        self.model_selector.connect("notify::selected", self._model_selected)
+        refresh_models = Gtk.Button(label="↻")
+        refresh_models.set_tooltip_text("Refresh available models")
+        refresh_models.connect("clicked", lambda *_: self._refresh_model_options())
+        model_row.append(self.backend_selector)
+        model_row.append(self.model_selector)
+        model_row.append(refresh_models)
+        page.append(model_row)
         hints = Gtk.Label(label="Task and note commands stay local. OpenCode chat prompts "
-                               "may go to its configured provider; uncheck to use local Ollama.")
+                               "may go to its configured provider; choose Local Ollama to keep free-form chat on-device.")
         hints.add_css_class("muted"); hints.set_xalign(0); hints.set_wrap(True)
         page.append(hints)
         return page
+
+    def _selected_model_ref(self) -> str:
+        return self.opencode_model if self.use_opencode else self.local_model
+
+    def _backend_selected(self, dropdown, _property):
+        if self._syncing_model_controls:
+            return
+        self.use_opencode = dropdown.get_selected() == 0
+        self.store.set_setting("use_opencode", "1" if self.use_opencode else "0")
+        self._refresh_model_options()
+
+    def _model_selected(self, dropdown, _property):
+        if self._syncing_model_controls:
+            return
+        index = dropdown.get_selected()
+        if index >= len(self.model_options):
+            return
+        model_ref = self.model_options[index]["id"]
+        if self.use_opencode:
+            self.opencode_model = model_ref
+            self.store.set_setting("opencode_model", model_ref)
+        else:
+            self.local_model = model_ref
+            self.brain.model = model_ref
+            self.store.set_setting("ollama_model", model_ref)
+        self._update_backend_status()
+
+    def _refresh_model_options(self):
+        backend = self.use_opencode
+        self._model_load_generation += 1
+        generation = self._model_load_generation
+
+        def load():
+            try:
+                options = self.opencode.models() if backend else self.brain.models()
+                error = None if options else (
+                    "No OpenCode chat models are available" if backend
+                    else "No local Ollama models are installed")
+            except Exception:
+                options = []
+                error = ("OpenCode unavailable · check its connection" if backend
+                         else "Ollama unavailable · start it locally")
+            GLib.idle_add(self._apply_model_options, backend, options, error, generation)
+
+        threading.Thread(target=load, daemon=True).start()
+
+    def _apply_model_options(self, backend: bool, options: list[dict[str, str]],
+                             error: str | None, generation: int):
+        if backend != self.use_opencode or generation != self._model_load_generation:
+            return GLib.SOURCE_REMOVE
+        self.model_options = options
+        current = self.opencode_model if backend else self.local_model
+        available = [item["id"] for item in options]
+        preferred = OPENCODE_DEFAULT_MODEL if backend else ""
+        if current not in available:
+            current = preferred if preferred in available else (available[0] if available else "")
+            if backend:
+                self.opencode_model = current or OPENCODE_DEFAULT_MODEL
+                if current:
+                    self.store.set_setting("opencode_model", current)
+            else:
+                self.local_model = current
+                if current:
+                    self.brain.model = current
+                    self.store.set_setting("ollama_model", current)
+                else:
+                    self.brain.model = None
+
+        self._syncing_model_controls = True
+        labels = [item["label"] for item in options] or [error or "No models available"]
+        self.model_selector.set_model(Gtk.StringList.new(labels))
+        self.model_selector.set_selected(available.index(current) if current in available else 0)
+        self.model_selector.set_sensitive(bool(options))
+        self._syncing_model_controls = False
+        self._update_backend_status(error)
+        return GLib.SOURCE_REMOVE
+
+    def _update_backend_status(self, error: str | None = None):
+        if error:
+            message = error
+        elif self.use_opencode:
+            selected = next((item["label"] for item in self.model_options
+                             if item["id"] == self.opencode_model), self.opencode_model)
+            message = f"OpenCode · {selected} · may be remote/paid"
+        else:
+            selected = next((item["label"] for item in self.model_options
+                             if item["id"] == self.local_model), self.local_model)
+            message = f"Local Ollama · {selected} · stays on this device"
+        self.brain_status.set_text(message)
 
     def _bubble(self, role: str, text: str, record: bool = True):
         outer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -442,7 +595,7 @@ class TabyWindow(Gtk.ApplicationWindow):
         self.chat_entry.set_sensitive(False)
         self.send_button.set_sensitive(False)
         threading.Thread(target=self._ask_brain,
-            args=(history, placeholder, self.opencode_toggle.get_active()), daemon=True).start()
+            args=(history, placeholder, self.use_opencode, self._selected_model_ref()), daemon=True).start()
 
     def _local_command(self, text: str):
         lower = text.lower().strip()
@@ -503,13 +656,13 @@ class TabyWindow(Gtk.ApplicationWindow):
             return "Your recent notes:\n" + "\n".join(f"• {n['title']}" for n in notes[:10])
         return None
 
-    def _ask_brain(self, history: list[dict], placeholder, use_opencode: bool):
+    def _ask_brain(self, history: list[dict], placeholder, use_opencode: bool, model_ref: str):
         success = True
         try:
             if use_opencode:
-                answer = self.opencode.ask(history)
+                answer = self.opencode.ask(history, model_ref)
             else:
-                answer = self.brain.ask(history)
+                answer = self.brain.ask(history, model_ref)
         except (OSError, TimeoutError, ValueError, RuntimeError) as error:
             success = False
             backend = "OpenCode" if use_opencode else "Ollama"
@@ -715,26 +868,6 @@ class TabyWindow(Gtk.ApplicationWindow):
         except Exception:
             # A disconnected optional display must not fail a local task action.
             pass
-
-    def _check_ollama(self):
-        if self.opencode.cli and self.opencode_toggle.get_active():
-            try:
-                model = self.opencode.default_model()
-                message = f"OpenCode ready · {model} · provider usage may be billable"
-            except Exception:
-                message = "OpenCode installed · default model unavailable"
-        else:
-            try:
-                model = self.brain.refresh()
-                message = f"Local Ollama ready · {model}" if model else "Ollama has no model installed"
-            except Exception:
-                message = "No AI backend · tasks and notes still work locally"
-        GLib.idle_add(self.brain_status.set_text, message)
-
-    def _opencode_toggled(self, button):
-        self.use_opencode = button.get_active()
-        self.store.set_setting("use_opencode", "1" if self.use_opencode else "0")
-        threading.Thread(target=self._check_ollama, daemon=True).start()
 
     def _check_reminders(self):
         now = datetime.now(timezone.utc).isoformat()
