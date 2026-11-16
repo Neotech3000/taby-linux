@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "enochlawrence.rose-assistant",
+  "name": "Rose Assistant",
+  "version": "0.1.0",
+  "author": "Enoch Lawrence",
+  "description": "A Rose-inspired, Taby-powered assistant overlay for Omarchy.",
+  "kinds": [
+    "overlay",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "overlay": "RoseOverlay.qml",
+    "barWidget": "RoseBarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Rose",
+    "description": "Open the Rose assistant overlay.",
+    "category": "Assistant",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

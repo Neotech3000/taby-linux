@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Bounded CLI bridge between the Omarchy overlay and Taby's local backend."""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+APP_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(APP_ROOT))
+
+from app import Device, OpenCode, Store  # noqa: E402
+
+
+def emit(data=None, error=None):
+    if error is not None:
+        print(json.dumps({"ok": False, "error": str(error)[:240]}, ensure_ascii=False))
+    else:
+        print(json.dumps({"ok": True, "data": data or {}}, ensure_ascii=False))
+
+
+def task_rows(store):
+    return [{"id": row["id"], "title": row["title"], "done": bool(row["done"])}
+            for row in store.tasks()]
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="rose-bridge")
+    sub = parser.add_subparsers(dest="action", required=True)
+    ask = sub.add_parser("ask", help="Ask configured OpenCode text generation")
+    ask.add_argument("messages_json")
+    task_add = sub.add_parser("task-add", help="Create a local task")
+    task_add.add_argument("title", nargs="+")
+    task_toggle = sub.add_parser("task-toggle", help="Complete or reopen a local task")
+    task_toggle.add_argument("task_id")
+    task_toggle.add_argument("state", choices=("done", "open"))
+    sub.add_parser("tasks-list", help="List local tasks")
+    note_add = sub.add_parser("note-add", help="Save a local note")
+    note_add.add_argument("title")
+    note_add.add_argument("body", nargs="*", default=[])
+    sub.add_parser("notes-list", help="List local note titles")
+    sub.add_parser("device-status", help="Read safe physical-device status")
+    device_play = sub.add_parser("device-play", help="Play a catalog animation")
+    device_play.add_argument("animation")
+    args = parser.parse_args()
+
+    try:
+        store = Store()
+        if args.action == "ask":
+            messages = json.loads(args.messages_json)
+            if not isinstance(messages, list) or not messages or len(messages) > 10:
+                return emit(error="Conversation must contain 1–10 messages.")
+            for item in messages:
+                if (not isinstance(item, dict) or item.get("role") not in ("user", "assistant")
+                        or not isinstance(item.get("content"), str)
+                        or len(item["content"]) > 6000):
+                    return emit(error="Conversation messages must be bounded user/assistant text.")
+            # Stateless generation: no file, shell, browser, or task tools.
+            return emit({"text": OpenCode().ask(messages)})
+
+        if args.action == "task-add":
+            title = " ".join(args.title).strip()
+            if not title or len(title) > 200:
+                return emit(error="Task title must be 1–200 characters.")
+            store.add_task(title)
+            device_text = ""
+            try:
+                device = Device()
+                port, info = device.find()
+                if (port and info.get("hardware_target") == "c6-lcd-1.47"
+                        and "confirmation" in device.animations):
+                    device.animate(port, "confirmation")
+                    device_text = " The C6 accepted a confirmation animation."
+            except Exception:
+                pass
+            return emit({"text": f"Added ‘{title}’ locally.{device_text}",
+                         "tasks": task_rows(store)})
+
+        if args.action == "tasks-list":
+            rows = task_rows(store)
+            text = "No tasks yet." if not rows else "\n".join(
+                f"{'✓' if row['done'] else '•'} {row['title']}" for row in rows)
+            return emit({"text": text, "tasks": rows})
+
+        if args.action == "task-toggle":
+            store.set_done(args.task_id, args.state == "done")
+            return emit({"tasks": task_rows(store)})
+
+        if args.action == "note-add":
+            title = args.title.strip()[:120] or "Untitled"
+            body = " ".join(args.body).strip()[:8000]
+            store.add_note(title, body)
+            return emit({"text": f"Saved ‘{title}’ locally."})
+
+        if args.action == "notes-list":
+            notes = store.notes()
+            text = "No notes yet." if not notes else "\n".join(
+                f"• {row['title']}" for row in notes[:20])
+            return emit({"text": text})
+
+        if args.action == "device-status":
+            device = Device()
+            port, info = device.find()
+            if not port:
+                return emit({"text": info.get("error", "No Taby device found."), "animations": []})
+            return emit({
+                "text": f"Connected · {info.get('hardware_target')} · "
+                        f"{info.get('display_width')}×{info.get('display_height')} · "
+                        f"firmware {info.get('firmware_version')}",
+                "port": port,
+                "animations": device.animations,
+            })
+
+        if args.action == "device-play":
+            device = Device()
+            port, info = device.find()
+            if not port:
+                return emit(error=info.get("error", "No Taby device found."))
+            if info.get("hardware_target") != "c6-lcd-1.47":
+                return emit(error="This plugin's catalog targets the experimental C6 board.")
+            reply = device.animate(port, args.animation)
+            return emit({"text": f"Accepted {args.animation}: {reply}"})
+
+        return emit(error="Unsupported bridge action.")
+    except Exception as error:
+        # Never print raw prompts, model output, credentials, or subprocess stderr.
+        return emit(error=f"{type(error).__name__}: {error}")
+
+
+if __name__ == "__main__":
+    main()
