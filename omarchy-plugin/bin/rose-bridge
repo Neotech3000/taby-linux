@@ -7,9 +7,30 @@ import sys
 from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(APP_ROOT))
 
-from app import Device, OpenCode, Store  # noqa: E402
+
+def load_app_backend():
+    """Resolve the companion source for both repo and installed-copy layouts."""
+    script = Path(__file__).resolve()
+    plugin_dir = script.parents[1]
+    marker = plugin_dir / ".taby-linux-local-install"
+    if marker.is_file():
+        plugin_source = Path(marker.read_text().strip()).expanduser().resolve()
+        if (plugin_source / "bin" / "rose-bridge").is_file():
+            app_root = plugin_source.parent
+        else:
+            app_root = plugin_source
+    else:
+        app_root = script.parents[2]
+
+    if not (app_root / "app.py").is_file():
+        raise RuntimeError(
+            "Taby companion source is missing; keep the project checkout available "
+            "and refresh the installed plugin copy."
+        )
+    sys.path.insert(0, str(app_root))
+    from app import Device, OpenCode, Store
+    return Device, OpenCode, Store
 
 
 def emit(data=None, error=None):
@@ -51,6 +72,7 @@ def main():
     args = parser.parse_args()
 
     try:
+        Device, OpenCode, Store = load_app_backend()
         store = Store()
         if args.action == "ask":
             messages = json.loads(args.messages_json)

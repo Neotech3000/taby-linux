@@ -38,9 +38,11 @@ Item {
   }
   readonly property color textColor: Color.foreground
   readonly property color mutedColor: Color.muted
-  readonly property color cardColor: Color.menu.background
+  readonly property color cardColor: Qt.rgba(Color.menu.background.r, Color.menu.background.g,
+                                               Color.menu.background.b, 0.99)
   readonly property color borderColor: Color.menu.border
-  readonly property color scrimColor: Color.menu.scrim
+  readonly property color scrimColor: Qt.rgba(Color.background.r, Color.background.g,
+                                                Color.background.b, 0.92)
   readonly property color roseColor: "#e9a2c7"
 
   ListModel { id: messages }

@@ -201,3 +201,8 @@ than cloning either product:
   section and has been summoned in the live shell. After fixing live delegate
   binding errors, a shell restart loaded the current files; the fresh log showed
   no Rose plugin QML errors. The owner should still confirm the visual appearance.
+- The first screenshot exposed two more integration issues: the copied bridge
+  looked for `app.py` in the plugin parent, and the active theme's menu surfaces
+  were too translucent. The bridge now resolves the source checkout through the
+  install marker, and the scrim/card enforce readable opacity while retaining
+  theme colors. Installed bridge smoke test and a second live-shell reload pass.
