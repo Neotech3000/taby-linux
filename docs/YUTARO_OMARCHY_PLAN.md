@@ -224,9 +224,9 @@ Omarchy rather than cloning either product:
   theme colors. Installed bridge smoke test and a second live-shell reload pass.
 - Added per-app backend/model selection for OpenCode and local Ollama in both the
   GTK companion and Omarchy overlay. Big Pickle is the app-level OpenCode default;
-  the user's global OpenCode configuration is unchanged. The current machine has
-  no local Ollama server, so that selector will report unavailable until one is
-  started and has a model installed.
+  the user's global OpenCode configuration is unchanged. At first the local Ollama
+  endpoint was unavailable; after owner approval the system service was started
+  and `qwen2.5:3b` installed. The service is not enabled to start at boot.
 - The user renamed the assistant from Rose to **Yutaro**. The plugin ID, manifest,
   QML entry points, bar label, fallback face filename, installer marker, and live
   Omarchy bar entry were migrated to `enochlawrence.yutaro-assistant`. This keeps

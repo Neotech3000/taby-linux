@@ -364,7 +364,7 @@ def main():
             else:
                 text = availability_error or (
                     "OpenCode has no available chat models" if backend == "opencode"
-                    else "No local Ollama models · start Ollama and install a model"
+                    else "Ollama is running, but no chat models are installed"
                 )
             return emit({"backend": backend, "model": current if selected else "", "models": options,
                          "available": bool(options), "text": text,
