@@ -340,12 +340,13 @@ class OpenCode:
             raise RuntimeError("OpenCode web search returned no usable results.")
         return sources
 
-    def ask(self, messages: list[dict], model_ref: str = OPENCODE_DEFAULT_MODEL) -> str:
+    def ask(self, messages: list[dict], model_ref: str = OPENCODE_DEFAULT_MODEL,
+            max_content_chars: int = 4000) -> str:
         provider_id, separator, model_id = model_ref.partition("/")
         if not separator or not provider_id or not model_id:
             raise ValueError("Select a valid OpenCode model.")
         conversation = "\n".join(
-            f"{item['role'].capitalize()}: {str(item['content'])[:4000]}"
+            f"{item['role'].capitalize()}: {str(item['content'])[:max_content_chars]}"
             for item in messages[-8:])
         prompt = f"{OPENCODE_SYSTEM_PROMPT}\n\nConversation:\n{conversation}\n\nAssistant:"
         result = self._api("post", "/api/experimental/generate/text", {

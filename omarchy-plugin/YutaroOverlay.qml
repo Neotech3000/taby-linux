@@ -19,6 +19,14 @@ Item {
   property string section: "chat"
   property string pendingAction: ""
   property string processError: ""
+  property bool approvalOpen: false
+  property string approvalKind: ""
+  property string pendingEditPath: ""
+  property string pendingEditInstruction: ""
+  property string proposalId: ""
+  property string proposalPath: ""
+  property string proposalSummary: ""
+  property string proposalDiff: ""
   property string backend: "opencode"
   property string modelRef: "opencode/big-pickle"
   property var modelOptions: []
@@ -67,6 +75,7 @@ Item {
 
   function close() {
     root.opened = false
+    root.approvalOpen = false
     root.clearNoteDraftOnSave = false
     if (bridgeProc.running) bridgeProc.running = false
     root.busy = false
@@ -112,6 +121,8 @@ Item {
     var taskMatch = /^(?:add|create)\s+(?:a\s+)?task(?:\s+to)?\s+(.+)$/.exec(value)
     var noteMatch = /^(?:note|save note|add note)\s+(.+)$/.exec(value)
     var searchMatch = /^(?:search web|web search)\s*:?[ \t]*(.+)$/.exec(value)
+    var readMatch = /^read file\s+(.+)$/i.exec(value)
+    var editMatch = /^edit file\s+([^:]+):\s*(.+)$/i.exec(value)
     if (taskMatch) {
       root.runBridge("task-add", [taskMatch[1]])
     } else if (lower === "tasks" || lower === "list tasks" || lower === "show tasks") {
@@ -127,6 +138,25 @@ Item {
       root.aiHistory.push({"role": "user", "content": "Search the web: " + searchMatch[1]})
       if (root.aiHistory.length > 10) root.aiHistory.shift()
       root.runBridge("web-research", [root.backend, root.modelRef, searchMatch[1]])
+    } else if (readMatch) {
+      root.runBridge("file-read", [readMatch[1].trim()])
+    } else if (editMatch) {
+      if (root.proposalId) {
+        root.appendMessage("assistant", "Review or discard the pending diff before preparing another edit.")
+      } else {
+        root.pendingEditPath = editMatch[1].trim()
+        root.pendingEditInstruction = editMatch[2].trim()
+        if (root.backend === "opencode") {
+          root.approvalKind = "file-edit"
+          root.approvalOpen = true
+        } else {
+          root.runBridge("file-propose", [root.backend, root.modelRef,
+                                           root.pendingEditPath, root.pendingEditInstruction])
+        }
+      }
+    } else if (lower === "run checks" || lower === "run project checks") {
+      root.approvalKind = "project-checks"
+      root.approvalOpen = true
     } else if (lower.startsWith("remind me to ")) {
       root.appendMessage("assistant", "Use “remind me to … in 10 minutes” in the GTK companion for reminders.")
     } else {
@@ -162,6 +192,27 @@ Item {
       root.aiHistory.push({"role": "assistant", "content": researchAnswer})
       if (root.aiHistory.length > 10) root.aiHistory.shift()
       root.appendMessage("assistant", researchAnswer)
+    } else if (root.pendingAction === "file-read") {
+      root.appendMessage("assistant", "File: " + data.path + "\n\n" + data.content)
+    } else if (root.pendingAction === "file-propose") {
+      root.proposalId = data.proposal_id || ""
+      root.proposalPath = data.path || ""
+      root.proposalSummary = data.summary || "Review the proposed change below."
+      root.proposalDiff = data.diff || "(No textual diff was returned.)"
+      root.appendMessage("assistant", "Draft ready for " + root.proposalPath
+                         + ". No file has been changed; review and approve the diff below.")
+    } else if (root.pendingAction === "file-apply") {
+      root.appendMessage("assistant", "Applied your approved edit to " + data.path + ".")
+      root.clearProposal()
+    } else if (root.pendingAction === "file-reject") {
+      root.appendMessage("assistant", "Discarded the proposal. No file was changed.")
+      root.clearProposal()
+    } else if (root.pendingAction === "run-project-checks") {
+      var checkLines = []
+      for (var checkIndex = 0; checkIndex < (data.results || []).length; checkIndex++)
+        checkLines.push((data.results[checkIndex].ok ? "✓ " : "✗ ") + data.results[checkIndex].name)
+      root.appendMessage("assistant", (data.text || "Project checks finished.")
+                         + (checkLines.length ? "\n" + checkLines.join("\n") : ""))
     } else if (root.pendingAction === "task-add") {
       root.appendMessage("assistant", data.text || "Task saved locally.")
       root.setTasks(data.tasks || [])
@@ -415,7 +466,8 @@ Item {
               spacing: 12
               ListView {
                 id: transcript
-                Layout.fillWidth: true; Layout.fillHeight: true
+                Layout.fillWidth: true; Layout.fillHeight: root.proposalId === ""
+                Layout.preferredHeight: root.proposalId === "" ? -1 : 170
                 clip: true; spacing: 9
                 model: messages
                 delegate: Item {
@@ -443,18 +495,53 @@ Item {
                   }
                 }
               }
+              ColumnLayout {
+                visible: root.proposalId !== ""
+                Layout.fillWidth: true
+                Layout.preferredHeight: 210
+                spacing: 6
+                Text {
+                  Layout.fillWidth: true
+                  text: root.proposalPath + " · " + root.proposalSummary
+                  color: root.roseColor; font.pixelSize: 11; wrapMode: Text.Wrap
+                }
+                TextArea {
+                  Layout.fillWidth: true; Layout.fillHeight: true
+                  text: root.proposalDiff
+                  readOnly: true
+                  wrapMode: TextEdit.NoWrap
+                  color: root.textColor
+                  font.family: "monospace"; font.pixelSize: 10
+                  background: Rectangle { color: Qt.rgba(0,0,0,0.20); radius: 8 }
+                }
+                RowLayout {
+                  Layout.alignment: Qt.AlignRight
+                  OmarchyUi.Button {
+                    text: "Discard"; foreground: root.mutedColor; accent: root.roseColor
+                    focusable: true; enabled: !root.busy
+                    onClicked: root.discardProposal()
+                  }
+                  OmarchyUi.Button {
+                    text: "Apply approved diff"; foreground: "white"
+                    background: "#9a6388"; accent: root.roseColor
+                    focusable: true; enabled: !root.busy
+                    onClicked: root.applyProposal()
+                  }
+                }
+              }
               RowLayout {
                 Layout.fillWidth: true
                 OmarchyUi.TextField {
                   id: promptField
                   Layout.fillWidth: true
-                  placeholderText: "Ask Yutaro, add a task, or save a note…"
+                  enabled: root.proposalId === ""
+                  placeholderText: "Ask Yutaro, search web, read file, or edit file…"
                   onAccepted: root.submitPrompt()
                 }
                 OmarchyUi.Button {
                   text: root.busy ? "…" : "Send"
                   foreground: "white"; accent: root.roseColor; background: "#9a6388"
-                  enabled: !root.busy; focusable: true
+                  enabled: !root.busy && root.proposalId === ""; focusable: true
                   onClicked: root.submitPrompt()
                 }
               }
@@ -473,9 +560,25 @@ Item {
                   }
                 }
               }
+              RowLayout {
+                Layout.fillWidth: true
+                spacing: 7
+                Repeater {
+                  model: ["Read file", "Edit file", "Run checks"]
+                  delegate: OmarchyUi.Button {
+                    required property string modelData
+                    Layout.fillWidth: true
+                    text: modelData; foreground: root.mutedColor; accent: root.roseColor
+                    background: Qt.rgba(1, 1, 1, 0.035)
+                    focusable: true
+                    onClicked: root.quickAction(modelData)
+                  }
+                }
+              }
               Text {
                 Layout.fillWidth: true
-                text: "Search web sends the query to OpenCode's configured search provider. "
+                text: "Workspace: this project only. File edits show a diff before Apply. "
+                  + "Search sends queries to OpenCode's configured provider. "
                   + (root.backend === "opencode"
                      ? "Model prompts may be remote/paid; tasks and notes stay local."
                      : "Ollama summarizes locally; tasks and notes stay local.")
@@ -616,6 +719,88 @@ Item {
 
       Text { anchors.bottom: parent.bottom; anchors.bottomMargin: 24; anchors.horizontalCenter: parent.horizontalCenter; text: root.processError; color: "#ff9caa"; font.pixelSize: 11 }
     }
+
+    Rectangle {
+      anchors.fill: parent
+      visible: root.approvalOpen
+      z: 100
+      color: Qt.rgba(Color.background.r, Color.background.g, Color.background.b, 0.82)
+      MouseArea { anchors.fill: parent; onClicked: {} }
+      Rectangle {
+        width: Math.min(520, parent.width - 40)
+        height: approvalCopy.implicitHeight + 124
+        anchors.centerIn: parent
+        radius: 22
+        color: root.cardColor
+        border.color: root.borderColor
+        ColumnLayout {
+          id: approvalCopy
+          anchors.fill: parent; anchors.margins: 24; spacing: 12
+          Text {
+            Layout.fillWidth: true
+            text: root.approvalKind === "file-edit" ? "Review file access" : "Run project checks?"
+            color: root.textColor; font.pixelSize: 18; font.bold: true
+          }
+          Text {
+            Layout.fillWidth: true
+            text: root.approvalKind === "file-edit"
+              ? (root.backend === "opencode"
+                 ? "Yutaro will read " + root.pendingEditPath + " inside this Taby project and send its contents plus your edit request to the selected OpenCode model. The provider may be remote or paid. It will prepare a diff only; nothing is written until you review and Apply it."
+                 : "Yutaro will read " + root.pendingEditPath + " inside this Taby project and ask the selected local model to prepare a diff. Nothing is written until you review and Apply it.")
+              : "Run only the fixed checks: Python syntax, Omarchy manifest validation, and git diff --check. No arbitrary command is run and no project file is intentionally changed."
+            color: root.mutedColor; font.pixelSize: 12; wrapMode: Text.Wrap
+          }
+          RowLayout {
+            Layout.alignment: Qt.AlignRight
+            OmarchyUi.Button {
+              text: "Cancel"; foreground: root.mutedColor; accent: root.roseColor
+              focusable: true; onClicked: root.cancelApproval()
+            }
+            OmarchyUi.Button {
+              text: root.approvalKind === "file-edit" ? "Continue" : "Run checks"
+              foreground: "white"; background: "#9a6388"; accent: root.roseColor
+              focusable: true; onClicked: root.confirmApproval()
+            }
+          }
+        }
+      }
+    }
+  }
+
+  function cancelApproval() {
+    root.approvalOpen = false
+    root.approvalKind = ""
+    root.pendingEditPath = ""
+    root.pendingEditInstruction = ""
+  }
+
+  function confirmApproval() {
+    var kind = root.approvalKind
+    root.approvalOpen = false
+    root.approvalKind = ""
+    if (kind === "file-edit") {
+      root.runBridge("file-propose", [root.backend, root.modelRef,
+                                       root.pendingEditPath, root.pendingEditInstruction])
+    } else if (kind === "project-checks") {
+      root.runBridge("run-project-checks", [])
+    }
+  }
+
+  function applyProposal() {
+    if (root.proposalId && !root.busy)
+      root.runBridge("file-apply", [root.proposalId])
+  }
+
+  function discardProposal() {
+    if (root.proposalId && !root.busy)
+      root.runBridge("file-reject", [root.proposalId])
+  }
+
+  function clearProposal() {
+    root.proposalId = ""
+    root.proposalPath = ""
+    root.proposalSummary = ""
+    root.proposalDiff = ""
   }
 
   function addTask() {
@@ -673,6 +858,17 @@ Item {
       root.section = "chat"
       promptField.text = "search web "
       Qt.callLater(function() { promptField.forceActiveFocus() })
+    } else if (label === "Read file") {
+      root.section = "chat"
+      promptField.text = "read file "
+      Qt.callLater(function() { promptField.forceActiveFocus() })
+    } else if (label === "Edit file") {
+      root.section = "chat"
+      promptField.text = "edit file "
+      Qt.callLater(function() { promptField.forceActiveFocus() })
+    } else if (label === "Run checks") {
+      root.approvalKind = "project-checks"
+      root.approvalOpen = true
     } else {
       root.section = "device"
       root.runBridge("device-status", [])

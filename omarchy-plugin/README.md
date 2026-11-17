@@ -15,6 +15,12 @@ with source URLs. Connect a search provider in OpenCode before using it. Yutaro
 does not get arbitrary browser, login, filesystem, or shell access and does not
 store search-provider credentials.
 
+Project access is confined to this checkout. `read file <relative-path>` displays
+an approved text file locally. `edit file <relative-path>: <request>` prepares a
+diff; OpenCode file contents require a separate send confirmation, and no write
+happens until you press **Apply approved diff**. `run checks` offers only the
+fixed local syntax/manifest/whitespace checks and asks first.
+
 Validate the manifest without changing your active shell:
 
 ```sh

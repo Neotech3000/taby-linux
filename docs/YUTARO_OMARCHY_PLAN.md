@@ -102,16 +102,19 @@ Omarchy rather than cloning either product:
 
 ## Safety and privacy constraints
 
-- No arbitrary shell, `eval`, unrestricted browser control, or agent tool loop in
-  the first plugin.
+- No arbitrary shell, `eval`, unrestricted browser control, or agent tool loop.
+  Workspace reads/edits are confined to the approved Taby checkout; file writes
+  require review, and command execution is limited to fixed project checks.
 - Internet access is limited to user-triggered OpenCode web searches. Display
   result URLs, treat snippets as untrusted input, and do not fetch authenticated
   pages or perform actions on websites.
-- The current integration uses OpenCode's stateless, tool-free text endpoint and
-  a separate explicit web-search request. It does not inherit OpenCode session
-  shell/file tools. Add future workspace or command capabilities only as
-  narrowly scoped tools with per-action approval; never give the model an
-  unrestricted shell loop.
+- OpenCode chat uses its stateless, tool-free text endpoint and a separate
+  explicit web-search request. Yutaro does not inherit OpenCode session shell or
+  file tools. File-edit requests go through a constrained bridge: only approved
+  project text files are read, sending contents to OpenCode needs separate user
+  consent, and the file changes only after the displayed diff is approved.
+- Project checks run only from a fixed allowlist after user confirmation; the
+  model cannot supply command strings or arguments.
 - Keep data stores under `$XDG_DATA_HOME/taby-linux` with user-only permissions.
 - Never put API keys in the repository, prompt, logs, screenshots, or command
   output. Reuse OpenCode's configured credentials through its supported CLI/API;
@@ -121,6 +124,8 @@ Omarchy rather than cloning either product:
   enables shell/file tools.
 - Ask before any future feature sends notes, tasks, screenshots, or device state
   to a model provider. A clear backend toggle is required.
+- Ask separately before sending project file contents to a model provider; keep
+  local-model file work on the selected local service.
 - Keep firmware flashing separate from the Omarchy plugin and never erase the
   full ESP32 flash or its NVS/factory data.
 

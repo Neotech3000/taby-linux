@@ -7,6 +7,9 @@ an official Hey Taby build.
 ## What works
 
 - Local SQLite tasks and notes.
+- Yutaro's reviewed project access stays inside the approved Taby checkout: `read file`
+  displays text locally, `edit file path: change` creates a diff for approval,
+  and `run checks` offers only a fixed command allowlist with confirmation.
 - A simple chat UI with explicit commands (`add/create task …`, `list tasks`,
   `remind me to … in 10 minutes`, `note title: body`, `find notes …`).
 - A model picker for OpenCode and local Ollama. OpenCode defaults to
@@ -26,7 +29,8 @@ kept in memory for the current app run only. Task and note commands are handled 
 sent to OpenCode. Free-form chat goes through OpenCode's stateless generation
 API, with no tool or shell access, and may be sent to the selected provider.
 Local Ollama is contacted only on localhost. The app does not connect to Hey
-Taby Cloud, execute shell commands, or flash firmware.
+Taby Cloud or flash firmware. The model has no arbitrary shell access; Yutaro's
+separate `run checks` action is limited to fixed project checks and asks first.
 Calendar sync, voice input, web actions, and the official Taby Brain are not
 implemented yet.
 
