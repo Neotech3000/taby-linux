@@ -241,3 +241,6 @@ Omarchy rather than cloning either product:
   it does not inherit OpenCode session tools. Any future workspace edits or
   command execution need narrow scopes and per-action approval. ElevenLabs
   dictation remains a future push-to-talk integration, not enabled yet.
+- Added a centered spinning lotus loading state sized to one physical inch square
+  using the screen density and device-pixel ratio. It appears only while Yutaro
+  is waiting for a bridge/model action.

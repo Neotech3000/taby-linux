@@ -309,6 +309,7 @@ Item {
   }
 
   PanelWindow {
+    id: panel
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
@@ -316,6 +317,15 @@ Item {
     WlrLayershell.namespace: "yutaro-taby-assistant"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+
+    // Qt reports physical pixels/mm; divide by the display scale to size the
+    // spinner at one physical inch in this window's logical coordinate space.
+    readonly property real oneInchLogicalPixels: {
+      var density = Number(Screen.pixelDensity)
+      var ratio = Number(Screen.devicePixelRatio)
+      var pixels = density * 25.4 / (isFinite(ratio) && ratio > 0 ? ratio : 1)
+      return isFinite(pixels) && pixels > 0 ? pixels : 96
+    }
 
     Rectangle {
       anchors.fill: parent
@@ -763,6 +773,41 @@ Item {
             }
           }
         }
+      }
+    }
+
+    Rectangle {
+      anchors.fill: parent
+      visible: root.busy
+      z: 200
+      color: Qt.rgba(Color.background.r, Color.background.g, Color.background.b, 0.82)
+      MouseArea { anchors.fill: parent; onClicked: {} }
+      Image {
+        id: lotusLoader
+        width: panel.oneInchLogicalPixels
+        height: panel.oneInchLogicalPixels
+        anchors.centerIn: parent
+        source: Qt.resolvedUrl("YutaroLotus.svg")
+        fillMode: Image.PreserveAspectFit
+        smooth: true
+        RotationAnimation on rotation {
+          from: 0
+          to: 360
+          duration: 1800
+          loops: Animation.Infinite
+        }
+      }
+      Text {
+        anchors.top: lotusLoader.bottom
+        anchors.topMargin: 14
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: root.pendingAction === "web-research" ? "Searching the web…"
+          : root.pendingAction === "file-propose" ? "Preparing a reviewed diff…"
+          : root.pendingAction === "run-project-checks" ? "Running approved checks…"
+          : "Yutaro is thinking…"
+        color: root.textColor
+        font.family: Style.font.family
+        font.pixelSize: 13
       }
     }
   }
