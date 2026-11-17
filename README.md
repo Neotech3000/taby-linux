@@ -12,6 +12,10 @@ an official Hey Taby build.
 - A model picker for OpenCode and local Ollama. OpenCode defaults to
   `opencode/big-pickle` using its stateless text endpoint; this app-level choice
   does not rewrite your global OpenCode config.
+- Explicit `search web <query>` uses OpenCode's configured search provider and
+  returns source links; it does not browse logged-in sites or execute actions.
+  A search provider must be connected/configured in OpenCode first; Yutaro does
+  not store provider credentials.
 - Optional local Ollama models discovered on `127.0.0.1:11434`. The app never
   starts Ollama or downloads a model for you.
 - USB discovery and approved animation playback for the Physical Taby firmware.
@@ -40,12 +44,16 @@ If needed, install the distro packages for Python GTK 4 and pyserial (for
 example, `python-gobject`/`python3-gobject` and `python3-serial`). Do not install
 PyGObject into a pip virtual environment; use your distro package manager.
 
-The chat pane lets you switch between OpenCode and Local Ollama and choose an
-available model. OpenCode uses your existing connection and defaults to Big
-Pickle, though provider limits may apply. Model prompts may be sent to the
-selected provider. Local Ollama is contacted only on `127.0.0.1`; it is not
-auto-started and the app never downloads models without asking. To use Ollama,
-start it and install a model that fits your computer:
+The chat pane is a separate UI over OpenCode's stateless, tool-free text API. It
+lets you switch between OpenCode and Local Ollama and choose an available model.
+OpenCode uses your existing connection and defaults to Big Pickle, though
+provider limits may apply. Model prompts may be sent to the
+selected provider. **Search web** is user-triggered, uses the search provider
+configured in OpenCode, and returns source URLs; connect a provider in OpenCode
+before using search. Yutaro does not get arbitrary browser, login, filesystem,
+or shell access. Local Ollama is contacted only on
+`127.0.0.1`; it is not auto-started and the app never downloads models without
+asking. To use Ollama, start it and install a model that fits your computer:
 
 ```sh
 ollama serve

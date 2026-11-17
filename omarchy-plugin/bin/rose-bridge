@@ -29,8 +29,9 @@ def load_app_backend():
             "and refresh the installed plugin copy."
         )
     sys.path.insert(0, str(app_root))
-    from app import Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store
-    return Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store
+    from app import (Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store,
+                     web_research_prompt, web_research_sources)
+    return Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store, web_research_prompt, web_research_sources
 
 
 def emit(data=None, error=None):
@@ -57,6 +58,10 @@ def main():
     ask.add_argument("backend", choices=("opencode", "ollama"))
     ask.add_argument("model_ref")
     ask.add_argument("messages_json")
+    research = sub.add_parser("web-research", help="Search the web through OpenCode and summarize sources")
+    research.add_argument("backend", choices=("opencode", "ollama"))
+    research.add_argument("model_ref")
+    research.add_argument("query", nargs="+")
     sub.add_parser("backend-status", help="Read the configured OpenCode model label")
     options = sub.add_parser("backend-options", help="List models for the selected backend")
     options.add_argument("backend", nargs="?", choices=("opencode", "ollama"))
@@ -79,7 +84,8 @@ def main():
     args = parser.parse_args()
 
     try:
-        Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store = load_app_backend()
+        (Device, Ollama, OpenCode, OPENCODE_DEFAULT_MODEL, Store,
+         web_research_prompt, web_research_sources) = load_app_backend()
         store = Store()
         if args.action == "ask":
             messages = json.loads(args.messages_json)
@@ -95,6 +101,23 @@ def main():
             if args.backend == "opencode":
                 return emit({"text": OpenCode().ask(messages, args.model_ref)})
             return emit({"text": Ollama().ask(messages, args.model_ref)})
+
+        if args.action == "web-research":
+            query = " ".join(args.query).strip()
+            try:
+                sources = OpenCode().search(query)
+            except Exception:
+                return emit(error="Web search isn't ready. Connect a search provider in OpenCode and retry.")
+            prompt = web_research_prompt(query, sources)
+            try:
+                research_turn = [{"role": "user", "content": prompt}]
+                if args.backend == "opencode":
+                    answer = OpenCode().ask(research_turn, args.model_ref)
+                else:
+                    answer = Ollama().ask(research_turn, args.model_ref)
+            except Exception as error:
+                answer = f"Search returned sources, but the selected model couldn't summarize them: {error}"
+            return emit({"text": answer + web_research_sources(sources), "sources": sources})
 
         if args.action == "backend-options":
             backend = args.backend

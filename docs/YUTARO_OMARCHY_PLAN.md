@@ -96,13 +96,22 @@ Omarchy rather than cloning either product:
   timeline; separate provider/web results from locally stored notes.
 - **Connectors:** add one at a time with explicit permissions, local secret
   storage, revoke controls, and a redacted action history.
-- **Voice:** push-to-talk first, visible listening state, local transcription
-  when available, cancel/mute control. Do not record continuously by default.
+- **Voice:** push-to-talk first, visible listening state, and an explicitly
+  enabled ElevenLabs transcription option with clear audio/provider disclosure,
+  cancel/mute control, and no background recording by default.
 
 ## Safety and privacy constraints
 
 - No arbitrary shell, `eval`, unrestricted browser control, or agent tool loop in
   the first plugin.
+- Internet access is limited to user-triggered OpenCode web searches. Display
+  result URLs, treat snippets as untrusted input, and do not fetch authenticated
+  pages or perform actions on websites.
+- The current integration uses OpenCode's stateless, tool-free text endpoint and
+  a separate explicit web-search request. It does not inherit OpenCode session
+  shell/file tools. Add future workspace or command capabilities only as
+  narrowly scoped tools with per-action approval; never give the model an
+  unrestricted shell loop.
 - Keep data stores under `$XDG_DATA_HOME/taby-linux` with user-only permissions.
 - Never put API keys in the repository, prompt, logs, screenshots, or command
   output. Reuse OpenCode's configured credentials through its supported CLI/API;
@@ -217,3 +226,13 @@ Omarchy rather than cloning either product:
   QML entry points, bar label, fallback face filename, installer marker, and live
   Omarchy bar entry were migrated to `enochlawrence.yutaro-assistant`. This keeps
   Rose as visual inspiration only, not the assistant's product name.
+- Added a user-triggered Search web action through OpenCode's `/api/websearch`;
+  Yutaro summarizes bounded snippets with the selected OpenCode or local Ollama
+  model and displays source URLs. Search snippets are treated as untrusted data,
+  and no shell/filesystem tools or autonomous browsing are exposed. This
+  OpenCode installation currently has no web-search provider configured; connect
+  one in OpenCode before search requests can succeed.
+- OpenCode text chat remains a second UI over its stateless, tool-free text API;
+  it does not inherit OpenCode session tools. Any future workspace edits or
+  command execution need narrow scopes and per-action approval. ElevenLabs
+  dictation remains a future push-to-talk integration, not enabled yet.

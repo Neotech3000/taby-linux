@@ -111,6 +111,7 @@ Item {
     var lower = value.toLowerCase()
     var taskMatch = /^(?:add|create)\s+(?:a\s+)?task(?:\s+to)?\s+(.+)$/.exec(value)
     var noteMatch = /^(?:note|save note|add note)\s+(.+)$/.exec(value)
+    var searchMatch = /^(?:search web|web search)\s*:?[ \t]*(.+)$/.exec(value)
     if (taskMatch) {
       root.runBridge("task-add", [taskMatch[1]])
     } else if (lower === "tasks" || lower === "list tasks" || lower === "show tasks") {
@@ -120,6 +121,12 @@ Item {
       root.runBridge("note-add", [pieces.shift(), pieces.join(":")])
     } else if (lower === "notes" || lower === "list notes") {
       root.runBridge("notes-list", [])
+    } else if (lower === "search web" || lower === "web search") {
+      root.appendMessage("assistant", "Add a query after “search web” to search, for example: “search web latest Ollama release”.")
+    } else if (searchMatch) {
+      root.aiHistory.push({"role": "user", "content": "Search the web: " + searchMatch[1]})
+      if (root.aiHistory.length > 10) root.aiHistory.shift()
+      root.runBridge("web-research", [root.backend, root.modelRef, searchMatch[1]])
     } else if (lower.startsWith("remind me to ")) {
       root.appendMessage("assistant", "Use “remind me to … in 10 minutes” in the GTK companion for reminders.")
     } else {
@@ -150,6 +157,11 @@ Item {
       root.aiHistory.push({"role": "assistant", "content": answer})
       if (root.aiHistory.length > 10) root.aiHistory.shift()
       root.appendMessage("assistant", answer)
+    } else if (root.pendingAction === "web-research") {
+      var researchAnswer = data.text || "No web results were returned."
+      root.aiHistory.push({"role": "assistant", "content": researchAnswer})
+      if (root.aiHistory.length > 10) root.aiHistory.shift()
+      root.appendMessage("assistant", researchAnswer)
     } else if (root.pendingAction === "task-add") {
       root.appendMessage("assistant", data.text || "Task saved locally.")
       root.setTasks(data.tasks || [])
@@ -450,7 +462,7 @@ Item {
                 Layout.fillWidth: true
                 spacing: 7
                 Repeater {
-                  model: ["List tasks", "Add task", "Add note", "Physical Taby"]
+                  model: ["List tasks", "Add task", "Add note", "Search web", "Physical Taby"]
                   delegate: OmarchyUi.Button {
                     required property string modelData
                     Layout.fillWidth: true
@@ -463,9 +475,10 @@ Item {
               }
               Text {
                 Layout.fillWidth: true
-                text: root.backend === "opencode"
-                  ? "OpenCode chat may be remote/paid. Tasks and notes stay on-device."
-                  : "Local Ollama keeps free-form chat on this device. Tasks and notes stay on-device."
+                text: "Search web sends the query to OpenCode's configured search provider. "
+                  + (root.backend === "opencode"
+                     ? "Model prompts may be remote/paid; tasks and notes stay local."
+                     : "Ollama summarizes locally; tasks and notes stay local.")
                 color: root.mutedColor; font.pixelSize: 10; wrapMode: Text.Wrap
               }
             }
@@ -656,6 +669,10 @@ Item {
       root.section = "notes"
       root.runBridge("notes-list", [])
       Qt.callLater(function() { noteTitleField.forceActiveFocus() })
+    } else if (label === "Search web") {
+      root.section = "chat"
+      promptField.text = "search web "
+      Qt.callLater(function() { promptField.forceActiveFocus() })
     } else {
       root.section = "device"
       root.runBridge("device-status", [])
