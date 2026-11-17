@@ -1,4 +1,4 @@
-# Rose-inspired Taby for Omarchy — Cursor handoff
+# Yutaro for Omarchy — Cursor handoff
 
 **Status:** design/implementation plan; no Omarchy configuration has been changed.
 **Working repo:** this repository root.
@@ -50,8 +50,8 @@ from a short teaser.
 
 ## Design direction
 
-Build **Rose-like capability with Taby-like warmth**, adapted to Omarchy rather
-than cloning either product:
+Build Yutaro with Taby-like warmth and Rose-inspired HUD accents, adapted to
+Omarchy rather than cloning either product:
 
 - A focused, keyboard-first overlay with a small animated face, compact history,
   one prompt field, and clear progress/results. Make it easy to dismiss and
@@ -88,7 +88,7 @@ than cloning either product:
    available as a standalone fallback until the plugin can call the same
    constrained backend reliably.
 
-### Rose/Jarvis-style follow-on
+### Advanced assistant follow-on (Rose/Jarvis inspiration)
 
 - **Multi-command planning:** translate a natural request into a visible plan;
   ask before actions that affect other apps, files, network, or the device.
@@ -164,14 +164,14 @@ than cloning either product:
 - Read Omarchy's installed plugin examples (`beam`, `field-notes`, and
   `advanced-workspaces`) and confirmed the shell supports manifest-based
   Quickshell overlays/bar widgets under user-owned plugin directories.
-- Current build milestone: create `omarchy-plugin/` here with a Rose-style
+- Current build milestone: create `omarchy-plugin/` here with Yutaro's Rose-inspired
   overlay, an optional small bar widget, and a constrained local bridge to the
   existing OpenCode text-only backend, SQLite tasks/notes, and C6 USB animation
   protocol. Validate it with `omarchy plugin validate`; do not install/enable it
   or alter `shell.json`/Hyprland bindings in this pass.
 - OpenCode can reuse the user's configured default model; keep provider
   cost/remote disclosure visible. Ollama is an optional, explicit local backend.
-- Initial plugin implementation is now in `omarchy-plugin/`: a dark Rose HUD
+- Initial plugin implementation is now in `omarchy-plugin/`: a dark Rose-inspired HUD
   overlay with an orbital badge, animated Taby face and Taby-style quick-action
   chips, plus a small bar launcher and a constrained
   `bin/rose-bridge` for OpenCode text generation, local tasks/notes, and the
@@ -202,7 +202,7 @@ than cloning either product:
 - The owner then approved installation. The plugin is enabled in the right bar
   section and has been summoned in the live shell. After fixing live delegate
   binding errors, a shell restart loaded the current files; the fresh log showed
-  no Rose plugin QML errors. The owner should still confirm the visual appearance.
+  no Yutaro plugin QML errors. The owner should still confirm the visual appearance.
 - The first screenshot exposed two more integration issues: the copied bridge
   looked for `app.py` in the plugin parent, and the active theme's menu surfaces
   were too translucent. The bridge now resolves the source checkout through the
@@ -213,3 +213,7 @@ than cloning either product:
   the user's global OpenCode configuration is unchanged. The current machine has
   no local Ollama server, so that selector will report unavailable until one is
   started and has a model installed.
+- The user renamed the assistant from Rose to **Yutaro**. The plugin ID, manifest,
+  QML entry points, bar label, fallback face filename, installer marker, and live
+  Omarchy bar entry were migrated to `enochlawrence.yutaro-assistant`. This keeps
+  Rose as visual inspiration only, not the assistant's product name.

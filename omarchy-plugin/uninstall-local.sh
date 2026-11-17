@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-PLUGIN_ID="enochlawrence.rose-assistant"
+PLUGIN_ID="enochlawrence.yutaro-assistant"
 PLUGINS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins"
 TARGET="$PLUGINS_DIR/$PLUGIN_ID"
-MARKER="$TARGET/.taby-linux-local-install"
+MARKER="$TARGET/.yutaro-linux-local-install"
 SOURCE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 if [ -L "$TARGET" ] || [ ! -d "$TARGET" ] || [ ! -f "$MARKER" ]; then

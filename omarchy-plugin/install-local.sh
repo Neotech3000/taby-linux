@@ -2,10 +2,10 @@
 set -eu
 
 SOURCE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-PLUGIN_ID="enochlawrence.rose-assistant"
+PLUGIN_ID="enochlawrence.yutaro-assistant"
 PLUGINS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins"
 TARGET="$PLUGINS_DIR/$PLUGIN_ID"
-MARKER="$TARGET/.taby-linux-local-install"
+MARKER="$TARGET/.yutaro-linux-local-install"
 UPDATE=0
 
 if [ "${1:-}" = "--update" ]; then
@@ -41,7 +41,7 @@ from pathlib import Path
 source, target = map(Path, sys.argv[1:])
 ignored = {".git", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache"}
 for item in source.iterdir():
-    if item.name in ignored or item.name == ".taby-linux-local-install" or item.suffix in {".pyc", ".pyo"}:
+    if item.name in ignored or item.name == ".yutaro-linux-local-install" or item.suffix in {".pyc", ".pyo"}:
         continue
     destination = target / item.name
     if item.is_dir():

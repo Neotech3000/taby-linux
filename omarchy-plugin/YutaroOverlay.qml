@@ -30,7 +30,7 @@ Item {
   property bool clearNoteDraftOnSave: false
 
   readonly property string pluginId: manifest && manifest.id
-    ? String(manifest.id) : "enochlawrence.rose-assistant"
+    ? String(manifest.id) : "enochlawrence.yutaro-assistant"
   readonly property string bridgePath: String(Qt.resolvedUrl("bin/rose-bridge"))
     .replace(/^file:\/\//, "")
   readonly property string faceUrl: {
@@ -57,7 +57,7 @@ Item {
     root.opened = true
     root.backendChecked = false
     if (messages.count === 0)
-      appendMessage("assistant", "I’m Rose. Ask me something, or give me a local task.")
+      appendMessage("assistant", "I’m Yutaro. Ask me something, or give me a local task.")
     Qt.callLater(function() {
       if (!root.opened) return
       promptField.forceActiveFocus()
@@ -250,7 +250,7 @@ Item {
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.namespace: "rose-taby-assistant"
+    WlrLayershell.namespace: "yutaro-taby-assistant"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
@@ -306,7 +306,7 @@ Item {
                 id: fallbackFace
                 anchors.centerIn: parent
                 width: 42; height: 42
-                source: Qt.resolvedUrl("RoseFace.svg")
+                source: Qt.resolvedUrl("YutaroFace.svg")
                 fillMode: Image.PreserveAspectFit
                 visible: animatedFace.status !== Image.Ready
               }
@@ -323,7 +323,7 @@ Item {
             ColumnLayout {
               Layout.fillWidth: true
               spacing: 2
-              Text { text: "ROSE / 01"; color: root.textColor; font.pixelSize: 19; font.bold: true; font.letterSpacing: 2 }
+              Text { text: "YUTARO / 01"; color: root.textColor; font.pixelSize: 19; font.bold: true; font.letterSpacing: 2 }
               Text { text: "TABY × OMARCHY · PERSONAL ASSISTANT"; color: root.mutedColor; font.pixelSize: 9; font.letterSpacing: 1.1 }
             }
             ColumnLayout {
@@ -436,7 +436,7 @@ Item {
                 OmarchyUi.TextField {
                   id: promptField
                   Layout.fillWidth: true
-                  placeholderText: "Ask Rose, add a task, or save a note…"
+                  placeholderText: "Ask Yutaro, add a task, or save a note…"
                   onAccepted: root.submitPrompt()
                 }
                 OmarchyUi.Button {

@@ -1,22 +1,22 @@
 {
   "schemaVersion": 1,
-  "id": "enochlawrence.rose-assistant",
-  "name": "Rose Assistant",
-  "version": "0.2.0",
+  "id": "enochlawrence.yutaro-assistant",
+  "name": "Yutaro Assistant",
+  "version": "0.3.0",
   "author": "Enoch Lawrence",
-  "description": "A Rose-inspired, Taby-powered assistant overlay for Omarchy.",
+  "description": "A Taby-inspired assistant overlay for Omarchy.",
   "kinds": [
     "overlay",
     "bar-widget"
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "RoseOverlay.qml",
-    "barWidget": "RoseBarWidget.qml"
+    "overlay": "YutaroOverlay.qml",
+    "barWidget": "YutaroBarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Rose",
-    "description": "Open the Rose assistant overlay.",
+    "displayName": "Yutaro",
+    "description": "Open the Yutaro assistant overlay.",
     "category": "Assistant",
     "allowMultiple": false,
     "defaultSection": "right"

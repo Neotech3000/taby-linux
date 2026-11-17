@@ -4,7 +4,7 @@ import qs.Ui as OmarchyUi
 
 OmarchyUi.BarWidget {
   id: root
-  moduleName: "enochlawrence.rose-assistant"
+  moduleName: "enochlawrence.yutaro-assistant"
 
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property bool showLabel: setting("showLabel", false)
@@ -12,7 +12,7 @@ OmarchyUi.BarWidget {
   implicitWidth: launcher.implicitWidth
   implicitHeight: launcher.implicitHeight
 
-  function openRose() {
+  function openYutaro() {
     if (bar && bar.shell && typeof bar.shell.toggle === "function")
       bar.shell.toggle(moduleName, "{}")
   }
@@ -21,12 +21,12 @@ OmarchyUi.BarWidget {
     id: launcher
     anchors.fill: parent
     bar: root.bar
-    text: root.showLabel ? "✿  Rose" : "✿"
+    text: root.showLabel ? "✿  Yutaro" : "✿"
     foreground: root.foreground
     fontSize: root.showLabel ? 12 : 16
-    tooltipText: "Open Rose assistant"
+    tooltipText: "Open Yutaro assistant"
     onPressed: function(button) {
-      if (button === Qt.LeftButton) root.openRose()
+      if (button === Qt.LeftButton) root.openYutaro()
     }
   }
 }

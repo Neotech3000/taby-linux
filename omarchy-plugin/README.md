@@ -1,4 +1,4 @@
-# Rose Assistant Omarchy plugin (development)
+# Yutaro Assistant Omarchy plugin (development)
 
 This is a Quickshell overlay + optional bar-widget plugin for Omarchy. It uses
 the companion's local SQLite store, OpenCode text-only generation, and the
@@ -22,7 +22,7 @@ command. Enabling updates the shell's plugin/bar configuration, but does not add
 a keybinding. `./uninstall-local.sh` disables and removes only this script's
 marked copy.
 
-The Rose overlay asks OpenCode's stateless text-generation endpoint, which has no
+The Yutaro overlay asks OpenCode's stateless text-generation endpoint, which has no
 tool access. It sends only conversational chat turns—not local task or note
 commands. Requests may go to the model provider configured in OpenCode and may
 incur usage charges. Local task/note commands go through `bin/rose-bridge`.

@@ -71,10 +71,10 @@ and build artifacts are intentionally not included in this repository.
 
 ## Omarchy plugin prototype
 
-The current Rose-inspired overlay/bar widget source is in `omarchy-plugin/`.
+The current Yutaro overlay/bar widget source is in `omarchy-plugin/`.
 It uses the same local backend and has passed `omarchy plugin validate`, but is
 not installed or enabled by default. See
-`docs/ROSE_OMARCHY_PLAN.md` before helping Cursor extend it.
+`docs/YUTARO_OMARCHY_PLAN.md` before helping Cursor extend it.
 
 ## License and project status
 
